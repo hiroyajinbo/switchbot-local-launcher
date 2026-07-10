@@ -248,6 +248,10 @@ h2 {
   color: var(--danger);
 }
 
+.muted-row .device-meta {
+  color: var(--muted);
+}
+
 .empty-text {
   color: var(--muted);
 }

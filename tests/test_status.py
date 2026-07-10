@@ -12,7 +12,14 @@ class FakeSwitchBotClient:
                     {"deviceId": "hub-1", "deviceName": "Hub 2", "deviceType": "Hub 2"},
                     {"deviceId": "light-1", "deviceName": "Light", "deviceType": "Color Bulb"},
                 ],
-                "infraredRemoteList": [],
+                "infraredRemoteList": [
+                    {
+                        "deviceId": "remote-1",
+                        "deviceName": "Air Conditioner",
+                        "remoteType": "Air Conditioner",
+                        "hubDeviceId": "hub-1",
+                    }
+                ],
             },
         }
 
@@ -49,3 +56,5 @@ async def test_status_snapshot_splits_environment_and_devices():
     assert snapshot.environment[0]["summary"] == "31.4 C / 58% / light 5"
     assert snapshot.devices[0]["label"] == "Light"
     assert snapshot.devices[0]["summary"] == "power on"
+    assert snapshot.remotes[0]["label"] == "Air Conditioner"
+    assert snapshot.remotes[0]["summary"].startswith("状態取得対象外")

@@ -2,6 +2,7 @@ const buttonList = document.querySelector("#buttonList");
 const deviceStatusList = document.querySelector("#deviceStatusList");
 const environmentList = document.querySelector("#environmentList");
 const refreshStatusButton = document.querySelector("#refreshStatusButton");
+const remoteList = document.querySelector("#remoteList");
 const resultMessage = document.querySelector("#resultMessage");
 const resultTime = document.querySelector("#resultTime");
 const statusBadge = document.querySelector("#statusBadge");
@@ -63,6 +64,7 @@ function renderStatus(snapshot) {
   statusCheckedAt.textContent = `更新: ${snapshot.checked_at}`;
   renderEnvironment(snapshot.environment || []);
   renderDevices(snapshot.devices || [], snapshot.errors || []);
+  renderRemotes(snapshot.remotes || []);
 }
 
 function renderEnvironment(items) {
@@ -117,6 +119,33 @@ function renderDevices(items, errors) {
     element.append(deviceMain(error.label, "取得不可", error.message));
     deviceStatusList.append(element);
   });
+}
+
+function renderRemotes(items) {
+  remoteList.replaceChildren();
+  if (items.length === 0) {
+    remoteList.append(emptyText("赤外線リモコンは見つかりませんでした。"));
+    return;
+  }
+
+  items.forEach((item) => {
+    const element = document.createElement("div");
+    element.className = "device-row muted-row";
+    element.append(deviceMain(item.label, item.type, item.summary), remoteDetails(item));
+    remoteList.append(element);
+  });
+}
+
+function remoteDetails(item) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "device-details";
+  if (item.hub_device_id) {
+    const pill = document.createElement("span");
+    pill.className = "detail-pill";
+    pill.textContent = `Hub: ${item.hub_device_id}`;
+    wrapper.append(pill);
+  }
+  return wrapper;
 }
 
 function deviceMain(label, type, summary) {
@@ -192,6 +221,7 @@ async function refreshStatus() {
   } catch (error) {
     environmentList.replaceChildren(emptyText(error.message));
     deviceStatusList.replaceChildren(emptyText("状態を取得できませんでした。"));
+    remoteList.replaceChildren(emptyText("赤外線リモコンを取得できませんでした。"));
   } finally {
     refreshStatusButton.disabled = false;
   }

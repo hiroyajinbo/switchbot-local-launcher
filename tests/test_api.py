@@ -48,6 +48,15 @@ class FakeStatusService:
                 }
             ],
             devices=[],
+            remotes=[
+                {
+                    "device_id": "remote-1",
+                    "label": "Air Conditioner",
+                    "type": "Air Conditioner",
+                    "hub_device_id": "hub-1",
+                    "summary": "状態取得対象外。",
+                }
+            ],
             errors=[],
         )
 
@@ -82,3 +91,4 @@ def test_get_status():
 
     assert response.status_code == 200
     assert response.json()["environment"][0]["label"] == "Hub 2"
+    assert response.json()["remotes"][0]["label"] == "Air Conditioner"

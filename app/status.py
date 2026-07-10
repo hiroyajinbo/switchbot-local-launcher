@@ -11,6 +11,7 @@ class DeviceStatusSnapshot:
     checked_at: str
     environment: list[dict[str, Any]]
     devices: list[dict[str, Any]]
+    remotes: list[dict[str, Any]]
     errors: list[dict[str, str]]
 
 
@@ -20,7 +21,9 @@ class DeviceStatusService:
 
     async def snapshot(self) -> DeviceStatusSnapshot:
         devices_response = await self._switchbot_client.get_devices()
-        devices = _collect_devices(devices_response.get("body", {}))
+        devices_body = devices_response.get("body", {})
+        devices = _collect_physical_devices(devices_body)
+        remotes = _collect_infrared_remotes(devices_body)
         status_items = []
         errors = []
 
@@ -46,22 +49,24 @@ class DeviceStatusService:
             checked_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             environment=[item for item in status_items if item["kind"] == "environment"],
             devices=[item for item in status_items if item["kind"] != "environment"],
+            remotes=[_format_remote(remote) for remote in remotes],
             errors=errors,
         )
 
 
-def _collect_devices(devices_body: dict[str, Any]) -> list[dict[str, Any]]:
+def _collect_physical_devices(devices_body: dict[str, Any]) -> list[dict[str, Any]]:
     return [
-        *[
-            dict(device, source="deviceList")
-            for device in devices_body.get("deviceList", [])
-            if isinstance(device, dict)
-        ],
-        *[
-            dict(device, source="infraredRemoteList")
-            for device in devices_body.get("infraredRemoteList", [])
-            if isinstance(device, dict)
-        ],
+        dict(device, source="deviceList")
+        for device in devices_body.get("deviceList", [])
+        if isinstance(device, dict)
+    ]
+
+
+def _collect_infrared_remotes(devices_body: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        dict(device, source="infraredRemoteList")
+        for device in devices_body.get("infraredRemoteList", [])
+        if isinstance(device, dict)
     ]
 
 
@@ -81,6 +86,17 @@ def _format_device_status(device: dict[str, Any], body: dict[str, Any]) -> dict[
         "details": _details_for_status(body),
     }
     return status
+
+
+def _format_remote(remote: dict[str, Any]) -> dict[str, Any]:
+    remote_type = remote.get("remoteType") or "Infrared Remote"
+    return {
+        "device_id": remote.get("deviceId"),
+        "label": remote.get("deviceName") or remote.get("deviceId"),
+        "type": remote_type,
+        "hub_device_id": remote.get("hubDeviceId"),
+        "summary": "状態取得対象外。操作する場合はSwitchBotアプリでシーン化してください。",
+    }
 
 
 def _has_environment_fields(body: dict[str, Any]) -> bool:

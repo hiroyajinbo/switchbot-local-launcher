@@ -82,7 +82,7 @@ PowerShellの実行ポリシーで `Activate.ps1` が使えない場合は、仮
 
 結果は `switchbot.inspection.json` に出力されます。このファイルはGit管理しません。
 調査観点は [docs/switchbot-api-capability-notes.md](docs/switchbot-api-capability-notes.md) に記録します。
-赤外線リモコンは一覧には出ますが、状態取得APIではエラーになる場合があります。
+赤外線リモコンは一覧には出ますが、状態取得対象外として画面に表示します。
 
 ## テスト
 

@@ -66,6 +66,7 @@ Observed status fields:
 Observed limitations:
 
 - Infrared remotes appeared in `infraredRemoteList`, but status requests returned API error `190 wrong deviceId`.
+- The browser UI treats infrared remotes as command/scene targets, not status-capable devices.
 - No room classification field was observed in device list or status output.
 - No automation definitions were observed.
 - No API output suggested device registration, automation editing, or room placement editing.
