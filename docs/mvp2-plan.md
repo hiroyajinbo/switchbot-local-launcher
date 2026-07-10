@@ -25,6 +25,7 @@ MVP1でSwitchBot scene実行まで確認できたため、MVP2では日常利用
    - scenes
    - hub temperature/humidity if exposed in status
    - unsupported or unknown areas such as rooms and automations
+8. Investigate direct device ON/OFF commands and generate safe button templates for supported device types.
 
 ## Out of Scope for MVP2
 

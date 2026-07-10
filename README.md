@@ -72,6 +72,15 @@ PowerShellの実行ポリシーで `Activate.ps1` が使えない場合は、仮
 
 `config.generated.json` が作られます。内容を確認して、使いたいボタンを `config.json` にコピーしてください。
 
+ON/OFF操作できそうなSwitchBot純正デバイスのボタン雛形を作る場合は、次を実行します。
+
+```powershell
+.\.venv\Scripts\python.exe -m app.config_device_commands
+```
+
+`config.device-buttons.generated.json` が作られます。対象は照明系とPlug Miniなど、ON/OFFが自然な機器に絞っています。
+内容を確認して、使いたいボタンを `config.json` の `buttons` にコピーしてください。
+
 ## SwitchBot APIの深掘り調査
 
 デバイス一覧、シーン一覧、取得可能なデバイス状態をまとめて調査できます。
