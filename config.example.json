@@ -1,0 +1,28 @@
+{
+  "buttons": [
+    {
+      "id": "living_light_on",
+      "label": "リビング照明 ON",
+      "type": "device_command",
+      "device_id": "replace-with-device-id",
+      "command": "turnOn",
+      "parameter": "default",
+      "command_type": "command"
+    },
+    {
+      "id": "living_light_off",
+      "label": "リビング照明 OFF",
+      "type": "device_command",
+      "device_id": "replace-with-device-id",
+      "command": "turnOff",
+      "parameter": "default",
+      "command_type": "command"
+    },
+    {
+      "id": "leaving_home",
+      "label": "いってきます",
+      "type": "scene",
+      "scene_id": "replace-with-scene-id"
+    }
+  ]
+}
