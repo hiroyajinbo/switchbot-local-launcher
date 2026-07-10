@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.actions import ActionResult
 from app.config import LauncherConfig
 from app.main import create_app
+from app.status import DeviceStatusSnapshot
 
 
 class FakeExecutor:
@@ -32,8 +33,27 @@ class FakeExecutor:
         )
 
 
+class FakeStatusService:
+    async def snapshot(self):
+        return DeviceStatusSnapshot(
+            checked_at="2026-07-10 10:31:00",
+            environment=[
+                {
+                    "device_id": "hub-1",
+                    "label": "Hub 2",
+                    "type": "Hub 2",
+                    "kind": "environment",
+                    "summary": "31.4 C / 58% / light 5",
+                    "details": [{"key": "temperature", "value": 31.4}],
+                }
+            ],
+            devices=[],
+            errors=[],
+        )
+
+
 def test_get_buttons():
-    app = create_app(executor=FakeExecutor())
+    app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
 
     with TestClient(app) as client:
         response = client.get("/api/buttons")
@@ -45,10 +65,20 @@ def test_get_buttons():
 
 
 def test_execute_action():
-    app = create_app(executor=FakeExecutor())
+    app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
 
     with TestClient(app) as client:
         response = client.post("/api/actions/light_on")
 
     assert response.status_code == 200
     assert response.json()["message"] == "照明 ON 成功"
+
+
+def test_get_status():
+    app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
+
+    with TestClient(app) as client:
+        response = client.get("/api/status")
+
+    assert response.status_code == 200
+    assert response.json()["environment"][0]["label"] == "Hub 2"

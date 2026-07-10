@@ -13,12 +13,34 @@
         <div id="statusBadge" class="status-badge">起動確認中</div>
       </header>
 
+      <section class="status-panel" aria-label="状態">
+        <div class="section-heading">
+          <h2>環境</h2>
+          <button id="refreshStatusButton" class="icon-button" type="button" title="状態を更新">
+            更新
+          </button>
+        </div>
+        <div id="environmentList" class="environment-list">
+          <div class="empty-text">取得待ちです。</div>
+        </div>
+        <div id="statusCheckedAt" class="checked-at"></div>
+      </section>
+
       <section class="toolbar" id="buttonList" aria-label="操作ボタン"></section>
 
       <section class="result" aria-live="polite">
         <div class="result-label">最終実行</div>
         <div id="resultMessage" class="result-message">まだ実行していません。</div>
         <div id="resultTime" class="result-time"></div>
+      </section>
+
+      <section class="device-panel" aria-label="デバイス状態">
+        <div class="section-heading">
+          <h2>デバイス状態</h2>
+        </div>
+        <div id="deviceStatusList" class="device-status-list">
+          <div class="empty-text">取得待ちです。</div>
+        </div>
       </section>
     </main>
 
