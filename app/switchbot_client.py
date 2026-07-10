@@ -48,6 +48,9 @@ class SwitchBotClient:
     async def get_devices(self) -> dict[str, Any]:
         return await self._get("/devices")
 
+    async def get_device_status(self, device_id: str) -> dict[str, Any]:
+        return await self._get(f"/devices/{device_id}/status")
+
     async def get_scenes(self) -> dict[str, Any]:
         return await self._get("/scenes")
 

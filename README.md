@@ -71,6 +71,18 @@ PowerShellの実行ポリシーで `Activate.ps1` が使えない場合は、仮
 
 `config.generated.json` が作られます。内容を確認して、使いたいボタンを `config.json` にコピーしてください。
 
+## SwitchBot APIの深掘り調査
+
+デバイス一覧、シーン一覧、取得可能なデバイス状態をまとめて調査できます。
+
+```powershell
+.\.venv\Scripts\python.exe -m app.inspect_switchbot
+```
+
+結果は `switchbot.inspection.json` に出力されます。このファイルはGit管理しません。
+調査観点は [docs/switchbot-api-capability-notes.md](docs/switchbot-api-capability-notes.md) に記録します。
+赤外線リモコンは一覧には出ますが、状態取得APIではエラーになる場合があります。
+
 ## テスト
 
 ```powershell
