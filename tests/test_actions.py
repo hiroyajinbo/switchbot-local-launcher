@@ -2,7 +2,7 @@ import pytest
 
 from app.actions import ActionExecutor
 from app.config import LauncherConfig
-from app.errors import ActionNotFoundError
+from app.errors import ActionNotFoundError, LauncherError
 
 
 class FakeSwitchBotClient:
@@ -61,3 +61,26 @@ async def test_execute_unknown_button():
 
     with pytest.raises(ActionNotFoundError):
         await executor.execute("missing")
+
+
+@pytest.mark.asyncio
+async def test_locked_scene_is_not_executed():
+    config = LauncherConfig.model_validate(
+        {
+            "buttons": [
+                {
+                    "id": "dangerous",
+                    "label": "危険なシーン",
+                    "type": "scene",
+                    "scene_id": "scene-1",
+                    "locked": True,
+                }
+            ]
+        }
+    )
+    client = FakeSwitchBotClient()
+    executor = ActionExecutor(config, client)
+
+    with pytest.raises(LauncherError, match="操作ロック"):
+        await executor.execute("dangerous")
+    assert client.calls == []

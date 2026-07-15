@@ -5,11 +5,24 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.requests import Request
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.actions import ActionExecutor, ActionResult
 from app.config import load_config
+from app.config_sync import (
+    ApplyCandidatesRequest,
+    ApplyCandidatesResult,
+    ConfigCandidateList,
+    ConfigSyncService,
+)
+from app.device_control import DeviceControlRequest, DeviceControlResult, DeviceControlService
+from app.device_preferences import (
+    DevicePreferenceService,
+    DevicePreferenceUpdate,
+    LightPresetUpdate,
+)
 from app.errors import ActionNotFoundError, LauncherError
 from app.settings import Settings, load_settings
 from app.status import DeviceStatusService, DeviceStatusSnapshot
@@ -23,6 +36,8 @@ def create_app(
     executor: ActionExecutor | None = None,
     status_service: DeviceStatusService | None = None,
     startup_error: LauncherError | None = None,
+    config_sync_service: ConfigSyncService | None = None,
+    device_control_service: DeviceControlService | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -30,6 +45,8 @@ def create_app(
             app.state.executor = executor
             app.state.status_service = status_service
             app.state.startup_error = startup_error
+            app.state.config_sync_service = config_sync_service
+            app.state.device_control_service = device_control_service
             yield
             return
 
@@ -42,7 +59,13 @@ def create_app(
             )
             switchbot_client = SwitchBotClient(credentials)
             app.state.executor = ActionExecutor(config, switchbot_client)
-            app.state.status_service = DeviceStatusService(switchbot_client)
+            app.state.config_sync_service = ConfigSyncService(
+                Path(loaded_settings.config_path), switchbot_client
+            )
+            config_path = Path(loaded_settings.config_path)
+            app.state.status_service = DeviceStatusService(switchbot_client, config_path)
+            app.state.device_control_service = DeviceControlService(switchbot_client, config_path)
+            app.state.device_preference_service = DevicePreferenceService(config_path)
             app.state.startup_error = None
         except LauncherError as exc:
             app.state.executor = None
@@ -52,6 +75,13 @@ def create_app(
 
     app = FastAPI(title="SwitchBot Local Launcher", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+
+    @app.middleware("http")
+    async def disable_local_cache(request: Request, call_next) -> Response:
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.get("/")
     async def index() -> FileResponse:
@@ -71,6 +101,8 @@ def create_app(
                     "id": button.id,
                     "label": button.label,
                     "type": button.type,
+                    "group": button.group,
+                    "locked": button.locked,
                 }
                 for button in current_executor.buttons
             ]
@@ -93,6 +125,103 @@ def create_app(
             return await current_status_service.snapshot()
         except LauncherError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/api/config/candidates")
+    async def config_candidates() -> ConfigCandidateList:
+        service = _get_config_sync_service(app)
+        try:
+            return await service.refresh()
+        except LauncherError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/api/config/apply")
+    async def apply_config_candidates(request: ApplyCandidatesRequest) -> ApplyCandidatesResult:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.apply(request.ids)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/config/remove")
+    async def remove_config_buttons(request: ApplyCandidatesRequest) -> dict[str, int]:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.remove_buttons(request.ids)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/api/buttons/{button_id}/lock")
+    async def update_button_lock(button_id: str, payload: dict[str, bool]) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            locked = payload.get("locked", False)
+            result = service.set_button_lock(button_id, locked)
+            _get_executor(app).set_lock(button_id, locked)
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/devices/{device_id}/control")
+    async def control_device(
+        device_id: str, request: DeviceControlRequest
+    ) -> DeviceControlResult:
+        service = _get_device_control_service(app)
+        try:
+            return await service.execute(device_id, request)
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/api/devices/{device_id}/preference")
+    async def update_device_preference(
+        device_id: str, update: DevicePreferenceUpdate
+    ) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(
+                status_code=500, detail="デバイス設定サービスが初期化されていません。"
+            )
+        try:
+            return service.update(device_id, update).model_dump()
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/devices/{device_id}/presets")
+    async def add_light_preset(device_id: str, update: LightPresetUpdate) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(
+                status_code=500, detail="プリセットサービスが初期化されていません。"
+            )
+        return service.add_preset(device_id, update).model_dump()
+
+    @app.delete("/api/devices/{device_id}/presets/{preset_name}")
+    async def remove_light_preset(device_id: str, preset_name: str) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(
+                status_code=500, detail="プリセットサービスが初期化されていません。"
+            )
+        if not service.remove_preset(device_id, preset_name):
+            raise HTTPException(status_code=404, detail="マイセットが見つかりません。")
+        return {"removed": True, "name": preset_name}
+
+    @app.get("/api/rooms")
+    async def get_rooms() -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(status_code=500, detail="部屋設定サービスが初期化されていません。")
+        return {"rooms": service.rooms()}
+
+    @app.post("/api/rooms")
+    async def add_room(payload: dict[str, str]) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(status_code=500, detail="部屋設定サービスが初期化されていません。")
+        return {"rooms": service.add_room(payload.get("room", ""))}
 
     return app
 
@@ -117,6 +246,20 @@ def _get_status_service(app: FastAPI) -> DeviceStatusService:
     if status_service is None:
         raise HTTPException(status_code=500, detail="状態取得サービスが初期化されていません。")
     return status_service
+
+
+def _get_config_sync_service(app: FastAPI) -> ConfigSyncService:
+    service = getattr(app.state, "config_sync_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="設定更新サービスが初期化されていません。")
+    return service
+
+
+def _get_device_control_service(app: FastAPI) -> DeviceControlService:
+    service = getattr(app.state, "device_control_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="デバイス操作サービスが初期化されていません。")
+    return service
 
 
 app = create_app()

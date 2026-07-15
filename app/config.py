@@ -12,11 +12,13 @@ class DeviceCommandButton(BaseModel):
 
     id: Annotated[str, Field(min_length=1, pattern=r"^[A-Za-z0-9_-]+$")]
     label: Annotated[str, Field(min_length=1)]
+    group: Annotated[str, Field(min_length=1)] = "その他"
     type: Literal["device_command"]
     device_id: Annotated[str, Field(min_length=1)]
     command: Annotated[str, Field(min_length=1)]
     parameter: str = "default"
     command_type: str = "command"
+    locked: bool = False
 
 
 class SceneButton(BaseModel):
@@ -24,17 +26,40 @@ class SceneButton(BaseModel):
 
     id: Annotated[str, Field(min_length=1, pattern=r"^[A-Za-z0-9_-]+$")]
     label: Annotated[str, Field(min_length=1)]
+    group: Annotated[str, Field(min_length=1)] = "その他"
     type: Literal["scene"]
     scene_id: Annotated[str, Field(min_length=1)]
+    locked: bool = False
 
 
 Button = Annotated[DeviceCommandButton | SceneButton, Field(discriminator="type")]
+
+
+class DevicePreference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    room: Annotated[str, Field(min_length=1)] = "未分類"
+    icon: Literal[
+        "light", "strip_light", "plug", "bot", "sensor", "lock", "hub", "climate",
+        "appliance", "other",
+    ] = "other"
+    locked: bool = False
+
+
+class LightPreset(BaseModel):
+    name: Annotated[str, Field(min_length=1)]
+    brightness: int | None = Field(default=None, ge=1, le=100)
+    color: str | None = None
+    color_temperature: int | None = Field(default=None, ge=2700, le=6500)
 
 
 class LauncherConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     buttons: Annotated[list[Button], Field(min_length=1)]
+    device_preferences: dict[str, DevicePreference] = Field(default_factory=dict)
+    rooms: list[str] = Field(default_factory=lambda: ["未分類"])
+    light_presets: dict[str, list[LightPreset]] = Field(default_factory=dict)
 
     def get_button(self, button_id: str) -> Button | None:
         return next((button for button in self.buttons if button.id == button_id), None)

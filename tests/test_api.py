@@ -69,8 +69,24 @@ def test_get_buttons():
 
     assert response.status_code == 200
     assert response.json()["buttons"] == [
-        {"id": "light_on", "label": "照明 ON", "type": "device_command"}
+        {
+            "id": "light_on",
+            "label": "照明 ON",
+            "type": "device_command",
+            "group": "その他",
+            "locked": False,
+        }
     ]
+
+
+def test_index_disables_browser_cache():
+    app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_execute_action():

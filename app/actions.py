@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.config import Button, DeviceCommandButton, LauncherConfig, SceneButton
-from app.errors import ActionNotFoundError
+from app.errors import ActionNotFoundError, LauncherError
 from app.switchbot_client import SwitchBotClient
 
 
@@ -24,10 +24,21 @@ class ActionExecutor:
     def buttons(self) -> list[Button]:
         return self._config.buttons
 
+    def set_lock(self, button_id: str, locked: bool) -> None:
+        button = self._config.get_button(button_id)
+        if button is None:
+            raise ActionNotFoundError(f"未定義のボタンIDです: {button_id}")
+        button.locked = locked
+
+    def replace_config(self, config: LauncherConfig) -> None:
+        self._config = config
+
     async def execute(self, button_id: str) -> ActionResult:
         button = self._config.get_button(button_id)
         if button is None:
             raise ActionNotFoundError(f"未定義のボタンIDです: {button_id}")
+        if button.locked:
+            raise LauncherError(f"{button.label} は操作ロックされています。")
 
         if isinstance(button, DeviceCommandButton):
             await self._switchbot_client.command_device(

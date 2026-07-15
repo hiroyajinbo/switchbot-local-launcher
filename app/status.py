@@ -1,7 +1,15 @@
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from app.config import DevicePreference, load_config
+from app.device_control import (
+    BRIGHTNESS_DEVICE_TYPES,
+    COLOR_DEVICE_TYPES,
+    COLOR_TEMPERATURE_DEVICE_TYPES,
+    POWER_DEVICE_TYPES,
+)
 from app.errors import SwitchBotApiError
 from app.switchbot_client import SwitchBotClient
 
@@ -16,8 +24,9 @@ class DeviceStatusSnapshot:
 
 
 class DeviceStatusService:
-    def __init__(self, switchbot_client: SwitchBotClient) -> None:
+    def __init__(self, switchbot_client: SwitchBotClient, config_path: Path | None = None) -> None:
         self._switchbot_client = switchbot_client
+        self._config_path = config_path
 
     async def snapshot(self) -> DeviceStatusSnapshot:
         devices_response = await self._switchbot_client.get_devices()
@@ -43,7 +52,11 @@ class DeviceStatusService:
                 )
                 continue
             body = status_response.get("body", {})
-            status_items.append(_format_device_status(device, body))
+            item = _format_device_status(device, body, self._preference(device, body))
+            if self._config_path is not None:
+                presets = load_config(self._config_path).light_presets.get(device_id, [])
+                item["presets"] = [preset.model_dump() for preset in presets]
+            status_items.append(item)
 
         return DeviceStatusSnapshot(
             checked_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -52,6 +65,15 @@ class DeviceStatusService:
             remotes=[_format_remote(remote) for remote in remotes],
             errors=errors,
         )
+
+    def _preference(self, device: dict[str, Any], body: dict[str, Any]) -> DevicePreference:
+        device_id = device.get("deviceId")
+        if self._config_path is not None and device_id:
+            saved = load_config(self._config_path).device_preferences.get(device_id)
+            if saved is not None:
+                return saved
+        device_type = body.get("deviceType") or device.get("deviceType") or "Unknown"
+        return DevicePreference(icon=_default_icon(device_type))
 
 
 def _collect_physical_devices(devices_body: dict[str, Any]) -> list[dict[str, Any]]:
@@ -70,13 +92,16 @@ def _collect_infrared_remotes(devices_body: dict[str, Any]) -> list[dict[str, An
     ]
 
 
-def _format_device_status(device: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+def _format_device_status(
+    device: dict[str, Any], body: dict[str, Any], preference: DevicePreference | None = None
+) -> dict[str, Any]:
     device_type = (
         body.get("deviceType")
         or device.get("deviceType")
         or device.get("remoteType")
         or "Unknown"
     )
+    preference = preference or DevicePreference(icon=_default_icon(device_type))
     status = {
         "device_id": device.get("deviceId"),
         "label": device.get("deviceName") or device.get("deviceId"),
@@ -84,8 +109,37 @@ def _format_device_status(device: dict[str, Any], body: dict[str, Any]) -> dict[
         "kind": "environment" if _has_environment_fields(body) else "device",
         "summary": _summary_for_status(body),
         "details": _details_for_status(body),
+        "controls": {
+            "power": device_type in POWER_DEVICE_TYPES,
+            "brightness": device_type in BRIGHTNESS_DEVICE_TYPES,
+            "press": device_type == "Bot" and body.get("deviceMode") == "pressMode",
+            "color": device_type in COLOR_DEVICE_TYPES,
+            "color_temperature": device_type in COLOR_TEMPERATURE_DEVICE_TYPES,
+        },
+        "room": preference.room,
+        "icon": preference.icon,
+        "locked": preference.locked,
+        "presets": [],
     }
     return status
+
+
+def _default_icon(device_type: str) -> str:
+    if device_type == "Strip Light":
+        return "strip_light"
+    if device_type in BRIGHTNESS_DEVICE_TYPES:
+        return "light"
+    if device_type == "Plug Mini (JP)":
+        return "plug"
+    if device_type in {"Contact Sensor"}:
+        return "sensor"
+    if device_type == "Smart Lock":
+        return "lock"
+    if device_type.startswith("Hub"):
+        return "hub"
+    if device_type == "Bot":
+        return "bot"
+    return "other"
 
 
 def _format_remote(remote: dict[str, Any]) -> dict[str, Any]:
@@ -130,6 +184,7 @@ def _details_for_status(body: dict[str, Any]) -> list[dict[str, Any]]:
         "power",
         "battery",
         "brightness",
+        "color",
         "colorTemperature",
         "temperature",
         "humidity",

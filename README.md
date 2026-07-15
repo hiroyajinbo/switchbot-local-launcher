@@ -1,5 +1,15 @@
 # SwitchBot Local Launcher
 
+## Project Location
+
+This project is managed under the shared development foundation:
+
+```text
+C:\Users\elega\Documents\CD開発フロー\projects\ローカル自動化ミニアプリ
+```
+
+Run setup, test, and application commands from this directory.
+
 Windows PC上で起動し、ブラウザからSwitchBot機器やシーンを操作するローカル用ミニアプリです。
 
 ## セットアップ
@@ -22,11 +32,23 @@ SWITCHBOT_CONFIG_PATH=config.json
 
 `config.json` に表示したいボタンを定義します。`.env` と `config.json` はGit管理しません。
 
+各ボタンには省略可能な `group` を指定できます。画面では同じグループのボタンがまとまって表示され、省略時は「その他」になります。実行結果は直近5件まで新しい順に表示されます。
+
+画面の「最新候補を取得」から、SwitchBotのシーンと安全なON/OFF対象デバイスを取得できます。追加する項目だけを選び「選択項目を設定へ追加」を押すと、既存設定を残したまま `config.json` へ追記します。反映後はアプリを再起動してください。
+
 ## 起動
 
 ```powershell
 python -m app
 ```
+
+日常利用では、PowerShellの実行ポリシーに影響されない次のコマンドを推奨します。`.venv`、`.env`、`config.json` が不足している場合は、その内容を表示して停止します。
+
+```powershell
+.\start.cmd
+```
+
+`start.ps1` も用意していますが、Windowsの実行ポリシーによって拒否される環境があります。ポリシーを変更する必要はありません。その場合は `start.cmd` を使用してください。
 
 起動後、ブラウザで `http://127.0.0.1:8765` を開きます。
 画面には操作ボタンに加えて、取得可能な環境情報とデバイス状態も表示されます。
@@ -92,6 +114,17 @@ ON/OFF操作できそうなSwitchBot純正デバイスのボタン雛形を作�
 結果は `switchbot.inspection.json` に出力されます。このファイルはGit管理しません。
 調査観点は [docs/switchbot-api-capability-notes.md](docs/switchbot-api-capability-notes.md) に記録します。
 赤外線リモコンは一覧には出ますが、状態取得対象外として画面に表示します。
+
+## 設定の検証
+
+`config.json` の `scene_id` と `device_id` が、直近にエクスポートしたSwitchBot一覧に存在するか確認できます。
+
+```powershell
+.\.venv\Scripts\python.exe -m app.export_resources
+.\.venv\Scripts\python.exe -m app.validate_config
+```
+
+未知のIDがある場合は該当するボタンIDを表示し、終了コード1で停止します。APIがリクエストを受け付けても実機が動くとは限らないため、設定変更後と実行テスト前にこの検証を行ってください。
 
 ## テスト
 

@@ -32,6 +32,7 @@ def test_build_device_command_config_generates_on_off_for_supported_devices():
         {
             "id": "living_light_on",
             "label": "Living Light ON",
+            "group": "デバイス",
             "type": "device_command",
             "device_id": "light-1",
             "command": "turnOn",
@@ -41,6 +42,7 @@ def test_build_device_command_config_generates_on_off_for_supported_devices():
         {
             "id": "living_light_off",
             "label": "Living Light OFF",
+            "group": "デバイス",
             "type": "device_command",
             "device_id": "light-1",
             "command": "turnOff",
@@ -50,6 +52,7 @@ def test_build_device_command_config_generates_on_off_for_supported_devices():
         {
             "id": "kettle_on",
             "label": "Kettle ON",
+            "group": "デバイス",
             "type": "device_command",
             "device_id": "plug-1",
             "command": "turnOn",
@@ -59,6 +62,7 @@ def test_build_device_command_config_generates_on_off_for_supported_devices():
         {
             "id": "kettle_off",
             "label": "Kettle OFF",
+            "group": "デバイス",
             "type": "device_command",
             "device_id": "plug-1",
             "command": "turnOff",

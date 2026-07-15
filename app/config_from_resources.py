@@ -27,6 +27,7 @@ def build_config_from_resources(resources: dict[str, Any]) -> dict[str, Any]:
             {
                 "id": _button_id("scene", scene_name, index),
                 "label": scene_name,
+                "group": "シーン",
                 "type": "scene",
                 "scene_id": scene_id,
             }

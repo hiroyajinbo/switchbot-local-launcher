@@ -35,6 +35,7 @@ def test_load_config_reads_device_and_scene_buttons(tmp_path):
 
     assert isinstance(config.buttons[0], DeviceCommandButton)
     assert config.buttons[0].parameter == "default"
+    assert config.buttons[0].group == "その他"
     assert isinstance(config.buttons[1], SceneButton)
 
 

@@ -3,6 +3,7 @@
     {
       "id": "living_light_on",
       "label": "リビング照明 ON",
+      "group": "リビング",
       "type": "device_command",
       "device_id": "replace-with-device-id",
       "command": "turnOn",
@@ -12,6 +13,7 @@
     {
       "id": "living_light_off",
       "label": "リビング照明 OFF",
+      "group": "リビング",
       "type": "device_command",
       "device_id": "replace-with-device-id",
       "command": "turnOff",
@@ -21,6 +23,7 @@
     {
       "id": "leaving_home",
       "label": "いってきます",
+      "group": "シーン",
       "type": "scene",
       "scene_id": "replace-with-scene-id"
     }

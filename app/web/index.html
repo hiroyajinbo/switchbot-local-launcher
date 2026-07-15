@@ -4,13 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SwitchBot Local Launcher</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/style.css?v=mvp2-feedback-1" />
   </head>
   <body>
     <main class="shell">
       <header class="header">
         <h1>SwitchBot</h1>
-        <div id="statusBadge" class="status-badge">起動確認中</div>
+        <div class="header-actions">
+          <button id="editModeButton" class="icon-button" type="button">編集</button>
+          <div id="statusBadge" class="status-badge">起動確認中</div>
+        </div>
       </header>
 
       <section class="status-panel" aria-label="状態">
@@ -26,22 +29,50 @@
         <div id="statusCheckedAt" class="checked-at"></div>
       </section>
 
-      <section class="toolbar" id="buttonList" aria-label="操作ボタン"></section>
-
-      <section class="result" aria-live="polite">
-        <div class="result-label">最終実行</div>
-        <div id="resultMessage" class="result-message">まだ実行していません。</div>
-        <div id="resultTime" class="result-time"></div>
+      <section class="scene-panel" aria-label="シーン">
+        <div class="section-heading"><h2>クイック操作</h2></div>
+        <div id="buttonList" class="action-groups"></div>
       </section>
 
-      <section class="device-panel" aria-label="デバイス状態">
+      <section class="device-panel primary-panel" aria-label="デバイス状態">
         <div class="section-heading">
-          <h2>デバイス状態</h2>
+          <h2>デバイス</h2>
+          <div class="room-creator">
+            <input id="newRoomName" type="text" placeholder="新しい部屋" />
+            <button id="addRoomButton" class="icon-button" type="button">部屋を追加</button>
+          </div>
         </div>
         <div id="deviceStatusList" class="device-status-list">
           <div class="empty-text">取得待ちです。</div>
         </div>
       </section>
+
+      <section class="config-panel" aria-label="設定更新">
+        <div class="section-heading">
+          <h2>機器・シーン設定</h2>
+          <button id="refreshCandidatesButton" class="icon-button" type="button">最新候補を取得</button>
+        </div>
+        <div id="candidateList" class="candidate-list">
+          <div class="empty-text">必要なときだけ最新候補を取得してください。</div>
+        </div>
+        <button id="applyCandidatesButton" class="apply-button" type="button" disabled>選択項目を設定へ追加</button>
+        <div id="staleList" class="candidate-list stale-list"></div>
+        <button id="removeStaleButton" class="danger-button" type="button" disabled>選択した存在しない設定を削除</button>
+        <div id="configMessage" class="checked-at"></div>
+      </section>
+
+      <section class="result legacy-result" aria-live="polite">
+        <div class="result-label">最終実行</div>
+        <div id="resultMessage" class="result-message">まだ実行していません。</div>
+        <div id="resultTime" class="result-time"></div>
+      </section>
+
+      <details class="history-panel" aria-label="実行履歴">
+        <summary>最近の実行 <span id="historyCount">0件</span></summary>
+        <ol id="historyList" class="history-list">
+          <li class="empty-text">まだ実行していません。</li>
+        </ol>
+      </details>
 
       <section class="device-panel" aria-label="赤外線リモコン">
         <div class="section-heading">
@@ -52,7 +83,8 @@
         </div>
       </section>
     </main>
+    <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=mvp2-feedback-1"></script>
   </body>
 </html>

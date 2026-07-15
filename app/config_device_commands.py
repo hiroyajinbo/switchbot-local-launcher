@@ -64,6 +64,7 @@ def _on_off_buttons(device_name: str, device_id: str, index: int) -> list[dict[s
         {
             "id": f"{base_id}_on",
             "label": f"{device_name} ON",
+            "group": "デバイス",
             "type": "device_command",
             "device_id": device_id,
             "command": "turnOn",
@@ -73,6 +74,7 @@ def _on_off_buttons(device_name: str, device_id: str, index: int) -> list[dict[s
         {
             "id": f"{base_id}_off",
             "label": f"{device_name} OFF",
+            "group": "デバイス",
             "type": "device_command",
             "device_id": device_id,
             "command": "turnOff",

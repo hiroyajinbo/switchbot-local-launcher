@@ -56,5 +56,12 @@ async def test_status_snapshot_splits_environment_and_devices():
     assert snapshot.environment[0]["summary"] == "31.4 C / 58% / light 5"
     assert snapshot.devices[0]["label"] == "Light"
     assert snapshot.devices[0]["summary"] == "power on"
+    assert snapshot.devices[0]["controls"] == {
+        "power": True,
+        "brightness": True,
+        "press": False,
+        "color": True,
+        "color_temperature": True,
+    }
     assert snapshot.remotes[0]["label"] == "Air Conditioner"
     assert snapshot.remotes[0]["summary"].startswith("状態取得対象外")
