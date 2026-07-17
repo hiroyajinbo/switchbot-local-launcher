@@ -76,3 +76,14 @@ async def test_controls_color_and_color_temperature():
         ("device-1", "setColor", "122:80:20"),
         ("device-1", "setColorTemperature", "3200"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_forced_error_does_not_send_command_or_fetch_devices():
+    client = FakeClient()
+    service = DeviceControlService(client, force_error=True)
+
+    with pytest.raises(LauncherError, match="SwitchBotへは送信していません"):
+        await service.execute("device-1", DeviceControlRequest(action="turn_on"))
+
+    assert client.commands == []

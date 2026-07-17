@@ -22,6 +22,7 @@ from app.device_preferences import (
     DevicePreferenceService,
     DevicePreferenceUpdate,
     LightPresetUpdate,
+    RoomOrderUpdate,
 )
 from app.errors import ActionNotFoundError, LauncherError
 from app.settings import Settings, load_settings
@@ -64,7 +65,11 @@ def create_app(
             )
             config_path = Path(loaded_settings.config_path)
             app.state.status_service = DeviceStatusService(switchbot_client, config_path)
-            app.state.device_control_service = DeviceControlService(switchbot_client, config_path)
+            app.state.device_control_service = DeviceControlService(
+                switchbot_client,
+                config_path,
+                force_error=loaded_settings.force_control_error,
+            )
             app.state.device_preference_service = DevicePreferenceService(config_path)
             app.state.startup_error = None
         except LauncherError as exc:
@@ -209,6 +214,20 @@ def create_app(
             raise HTTPException(status_code=404, detail="マイセットが見つかりません。")
         return {"removed": True, "name": preset_name}
 
+    @app.put("/api/devices/{device_id}/presets/{preset_name}")
+    async def update_light_preset(
+        device_id: str, preset_name: str, update: LightPresetUpdate
+    ) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(
+                status_code=500, detail="プリセットサービスが初期化されていません。"
+            )
+        try:
+            return service.update_preset(device_id, preset_name, update).model_dump()
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.get("/api/rooms")
     async def get_rooms() -> dict[str, Any]:
         service = getattr(app.state, "device_preference_service", None)
@@ -222,6 +241,16 @@ def create_app(
         if service is None:
             raise HTTPException(status_code=500, detail="部屋設定サービスが初期化されていません。")
         return {"rooms": service.add_room(payload.get("room", ""))}
+
+    @app.put("/api/rooms/order")
+    async def reorder_rooms(update: RoomOrderUpdate) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(status_code=500, detail="部屋設定サービスが初期化されていません。")
+        try:
+            return {"rooms": service.reorder_rooms(update.rooms)}
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return app
 

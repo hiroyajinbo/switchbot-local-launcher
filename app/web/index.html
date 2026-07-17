@@ -4,13 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SwitchBot Local Launcher</title>
-    <link rel="stylesheet" href="/static/style.css?v=mvp2-feedback-1" />
+    <link rel="stylesheet" href="/static/style.css?v=mvp2-ui-2" />
   </head>
   <body>
     <main class="shell">
       <header class="header">
         <h1>SwitchBot</h1>
         <div class="header-actions">
+          <button id="themeButton" class="icon-button" type="button" aria-label="ダークモードに切り替え">🌙</button>
           <button id="editModeButton" class="icon-button" type="button">編集</button>
           <div id="statusBadge" class="status-badge">起動確認中</div>
         </div>
@@ -85,6 +86,6 @@
     </main>
     <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=mvp2-feedback-1"></script>
+    <script src="/static/app.js?v=mvp2-ui-2"></script>
   </body>
 </html>

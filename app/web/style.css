@@ -10,6 +10,24 @@
   --danger: #b42318;
   --success-bg: #e8f7ef;
   --error-bg: #fff0ee;
+  --control-bg: #edf0f3;
+  --shadow: rgb(0 0 0 / 16%);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111820;
+  --surface: #1a232d;
+  --text: #edf3f8;
+  --muted: #a7b4c3;
+  --line: #354251;
+  --accent: #38a993;
+  --accent-strong: #73d2bd;
+  --danger: #ff8277;
+  --success-bg: #17372f;
+  --error-bg: #42231f;
+  --control-bg: #28333f;
+  --shadow: rgb(0 0 0 / 45%);
 }
 
 * {
@@ -315,7 +333,19 @@ h2 {
 }
 
 .room-section h3 {
-  margin: 0 0 14px;
+  margin: 0;
+}
+
+.room-heading {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 14px;
+}
+
+.room-order-controls { gap: 4px; }
+.room-order-controls .mini-button { min-width: 34px; padding: 4px 8px; }
+body:not(.edit-mode) .room-section.empty-room { display: none; }
+.room-section.empty-room .room-device-grid::after {
+  content: "デバイス未登録"; color: var(--muted); font-size: 13px;
 }
 
 .preference-controls {
@@ -559,7 +589,7 @@ body:not(.edit-mode) .device-icon-button { pointer-events: none; border-color: t
 .power-toggle {
   display: inline-flex; align-items: center; gap: 8px; min-width: 86px;
   border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px 4px 4px;
-  background: #edf0f3; color: var(--muted); cursor: pointer;
+  background: var(--control-bg); color: var(--muted); cursor: pointer;
 }
 .power-toggle span {
   width: 26px; height: 26px; border-radius: 50%; background: var(--surface);
@@ -584,7 +614,7 @@ body:not(.edit-mode) .device-icon-button { pointer-events: none; border-color: t
 .toast {
   border: 1px solid #b7e4cf; border-radius: 12px; padding: 14px 16px;
   background: var(--success-bg); color: var(--accent-strong);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 16%); font-weight: 700;
+  box-shadow: 0 10px 30px var(--shadow); font-weight: 700;
 }
 .toast.error { border-color: #ffc9c2; background: var(--error-bg); color: var(--danger); }
 .action-groups { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
@@ -633,26 +663,42 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; }
 .device-lock.locked:hover, .scene-lock.locked:hover { border-color: var(--danger); background: var(--error-bg); }
 .light-presets { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
 .light-presets .mini-button { border-radius: 999px; }
+.light-presets .mini-button:first-child {
+  display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.2;
+}
+.light-presets .mini-button small { color: var(--muted); font-size: 10px; font-weight: 500; }
 .preset-chip { display: inline-flex; }
 .preset-chip .preset-remove {
   display: none; min-width: 32px; margin-left: -1px; border-color: var(--line);
   border-radius: 0 999px 999px 0; padding-inline: 8px; color: var(--muted);
 }
-.edit-mode .preset-chip .preset-remove { display: inline-grid; place-items: center; }
+.preset-chip .preset-edit {
+  display: none; min-width: 32px; margin-left: -1px; border-color: var(--line);
+  border-radius: 0; padding-inline: 8px; color: var(--muted);
+}
+.edit-mode .preset-chip .preset-remove,
+.edit-mode .preset-chip .preset-edit { display: inline-grid; place-items: center; }
 .edit-mode .preset-chip > .mini-button:first-child { border-radius: 999px 0 0 999px; }
 body:not(.edit-mode) .preset-chip > .mini-button:first-child { border-radius: 999px; }
 .preset-chip .preset-remove:not(:disabled):hover {
   border-color: var(--danger); background: var(--error-bg); color: var(--danger);
 }
+.preset-chip .preset-edit:not(:disabled):hover {
+  border-color: var(--accent); background: var(--success-bg); color: var(--accent-strong);
+}
 .preset-editor {
   display: flex; flex-wrap: wrap; gap: 6px; width: 100%; padding: 10px;
-  border: 1px solid var(--line); border-radius: 10px; background: var(--background);
+  border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
 }
 .preset-editor[hidden] { display: none; }
 .preset-editor input, .preset-editor select {
   min-height: 36px; border: 1px solid var(--line); border-radius: 8px;
   padding: 6px 10px; background: var(--surface); color: var(--text);
 }
+.preset-editor .preset-name { flex: 1 1 140px; }
+.preset-editor .preset-brightness,
+.preset-editor .preset-temperature { width: 96px; }
+.preset-editor .preset-color { width: 44px; padding: 3px; }
 .edit-only { display: none; }
 .edit-mode .edit-only { display: inline-grid; }
 .scene-action.locked .action-button:disabled { cursor: not-allowed; }

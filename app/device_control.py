@@ -26,13 +26,23 @@ class DeviceControlResult(BaseModel):
 
 
 class DeviceControlService:
-    def __init__(self, client: SwitchBotClient, config_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        client: SwitchBotClient,
+        config_path: Path | None = None,
+        force_error: bool = False,
+    ) -> None:
         self._client = client
         self._config_path = config_path
+        self._force_error = force_error
 
     async def execute(
         self, device_id: str, request: DeviceControlRequest
     ) -> DeviceControlResult:
+        if self._force_error:
+            raise LauncherError(
+                "テスト用の操作失敗を発生させました。SwitchBotへは送信していません。"
+            )
         if self._config_path is not None:
             preference = load_config(self._config_path).device_preferences.get(device_id)
             if preference is not None and preference.locked:

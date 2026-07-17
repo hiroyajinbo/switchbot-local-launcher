@@ -19,6 +19,7 @@ const staleList = document.querySelector("#staleList");
 const statusBadge = document.querySelector("#statusBadge");
 const statusCheckedAt = document.querySelector("#statusCheckedAt");
 const toastRegion = document.querySelector("#toastRegion");
+const themeButton = document.querySelector("#themeButton");
 const executionHistory = [];
 const pendingDeviceDetails = new Map();
 let statusRefreshTimer = null;
@@ -207,14 +208,32 @@ function renderDevices(items, errors) {
     if (!rooms.has(room)) rooms.set(room, []);
     rooms.get(room).push(item);
   });
-  rooms.forEach((roomItems, room) => {
+  const roomOrder = [
+    ...availableRooms,
+    ...[...rooms.keys()].filter((room) => !availableRooms.includes(room)),
+  ];
+  roomOrder.forEach((room) => {
+    const roomItems = rooms.get(room) || [];
     const section = document.createElement("section");
-    section.className = "room-section";
+    section.className = `room-section${roomItems.length === 0 ? " empty-room" : ""}`;
+    const headingRow = document.createElement("div");
+    headingRow.className = "room-heading";
     const heading = document.createElement("h3");
     heading.textContent = room;
+    const orderControls = document.createElement("div");
+    orderControls.className = "room-order-controls edit-only";
+    const up = controlButton("↑", () => moveRoom(room, -1));
+    up.title = `${room}を上へ移動`;
+    up.disabled = availableRooms.indexOf(room) <= 0;
+    const down = controlButton("↓", () => moveRoom(room, 1));
+    down.title = `${room}を下へ移動`;
+    const configuredIndex = availableRooms.indexOf(room);
+    down.disabled = configuredIndex < 0 || configuredIndex >= availableRooms.length - 1;
+    orderControls.append(up, down);
+    headingRow.append(heading, orderControls);
     const grid = document.createElement("div");
     grid.className = "room-device-grid";
-    section.append(heading, grid);
+    section.append(headingRow, grid);
     roomItems.forEach((item) => {
     const element = document.createElement("div");
     element.className = `device-row${item.locked ? " locked" : ""}`;
@@ -325,21 +344,29 @@ function deviceControls(item) {
   if (item.controls.brightness) {
     const presets = document.createElement("div");
     presets.className = "light-presets";
+    const editor = createLightPresetEditor(item);
     (item.presets || []).forEach((preset) => {
       const chip = document.createElement("span");
       chip.className = "preset-chip";
       const button = controlButton(preset.name, () => applyLightPreset(item, preset));
+      button.title = presetSummary(preset);
+      const summary = document.createElement("small");
+      summary.textContent = presetSummary(preset);
+      button.append(summary);
+      const edit = controlButton("✎", () => openLightPresetEditor(item, editor, preset));
+      edit.classList.add("preset-edit");
+      edit.title = `マイセット「${preset.name}」を編集`;
+      edit.setAttribute("aria-label", edit.title);
       const remove = controlButton("×", () => removeLightPreset(item, preset));
       remove.classList.add("preset-remove");
       remove.title = `マイセット「${preset.name}」を削除`;
       remove.setAttribute("aria-label", remove.title);
-      chip.append(button, remove);
+      chip.append(button, edit, remove);
       presets.append(chip);
     });
-    const editor = createLightPresetEditor(item);
     const add = controlButton("＋ マイセット", () => {
-      editor.hidden = !editor.hidden;
-      if (!editor.hidden) editor.querySelector("input")?.focus();
+      if (!editor.hidden && !editor.dataset.originalName) editor.hidden = true;
+      else openLightPresetEditor(item, editor);
     });
     presets.append(add);
     controls.append(presets, editor);
@@ -363,16 +390,38 @@ function createLightPresetEditor(item) {
   name.type = "text";
   name.maxLength = 40;
   name.placeholder = "マイセット名";
+  name.className = "preset-name";
   name.setAttribute("aria-label", `${item.label}のマイセット名`);
+  const brightness = document.createElement("input");
+  brightness.type = "number";
+  brightness.min = "1";
+  brightness.max = "100";
+  brightness.className = "preset-brightness";
+  brightness.setAttribute("aria-label", "明るさ");
+  const color = document.createElement("input");
+  color.type = "color";
+  color.className = "preset-color";
+  color.setAttribute("aria-label", "RGB色");
+  color.hidden = !item.controls.color;
+  const temperature = document.createElement("input");
+  temperature.type = "number";
+  temperature.min = "2700";
+  temperature.max = "6500";
+  temperature.step = "100";
+  temperature.className = "preset-temperature";
+  temperature.setAttribute("aria-label", "色温度");
+  temperature.hidden = !item.controls.color_temperature;
   const mode = document.createElement("select");
+  mode.className = "preset-mode";
   mode.setAttribute("aria-label", "保存する色設定");
-  mode.append(new Option("現在のRGB色", "color"), new Option("現在の色温度", "temperature"));
+  mode.append(new Option("RGB色を保存", "color"), new Option("色温度を保存", "temperature"));
   mode.hidden = !(item.controls.color && item.controls.color_temperature);
   const save = controlButton("保存", () => {});
   save.type = "submit";
   const cancel = controlButton("キャンセル", () => {
     editor.hidden = true;
     name.value = "";
+    editor.dataset.originalName = "";
   });
   cancel.type = "button";
   editor.addEventListener("submit", async (event) => {
@@ -381,24 +430,62 @@ function createLightPresetEditor(item) {
       name.focus();
       return;
     }
-    await saveLightPreset(item, name.value.trim(), mode.value, editor);
+    await saveLightPreset(item, editor);
   });
-  editor.append(name);
+  editor.append(name, brightness);
   if (!mode.hidden) editor.append(mode);
+  if (!color.hidden) editor.append(color);
+  if (!temperature.hidden) editor.append(temperature);
   editor.append(save, cancel);
   return editor;
 }
 
-async function saveLightPreset(item, name, mode, editor) {
+function openLightPresetEditor(item, editor, preset = null) {
   const row = document.querySelector(`[data-device-id="${CSS.escape(item.device_id)}"]`);
-  const brightness = Number(row?.querySelector('input[title="明るさ"]')?.value || 0) || null;
-  const colorHex = row?.querySelector('input[title="色"]')?.value;
-  const colorTemperature = Number(row?.querySelector('input[title="色温度"]')?.value || 0) || null;
-  const useColor = Boolean(colorHex) && (!colorTemperature || mode === "color");
+  editor.dataset.originalName = preset?.name || "";
+  editor.querySelector(".preset-name").value = preset?.name || "";
+  editor.querySelector(".preset-brightness").value = String(
+    preset?.brightness || row?.querySelector('input[title="明るさ"]')?.value || 50,
+  );
+  const color = editor.querySelector(".preset-color");
+  if (color) color.value = rgbToHex(preset?.color || hexToRgb(row?.querySelector('input[title="色"]')?.value || "#ffffff"));
+  const temperature = editor.querySelector(".preset-temperature");
+  if (temperature) {
+    temperature.value = String(
+      preset?.color_temperature || row?.querySelector('input[title="色温度"]')?.value || 4000,
+    );
+  }
+  const mode = editor.querySelector(".preset-mode");
+  if (mode) mode.value = preset?.color ? "color" : "temperature";
+  editor.hidden = false;
+  editor.querySelector(".preset-name").focus();
+}
+
+function presetSummary(preset) {
+  const details = [`明るさ ${preset.brightness}%`];
+  if (preset.color) details.push(`RGB ${preset.color}`);
+  if (preset.color_temperature) details.push(`色温度 ${preset.color_temperature}K`);
+  return details.join(" / ");
+}
+
+async function saveLightPreset(item, editor) {
+  const name = editor.querySelector(".preset-name").value.trim();
+  const brightness = Number(editor.querySelector(".preset-brightness").value);
+  const mode = editor.querySelector(".preset-mode")?.value || (item.controls.color ? "color" : "temperature");
+  const colorHex = editor.querySelector(".preset-color")?.value;
+  const colorTemperature = Number(editor.querySelector(".preset-temperature")?.value || 0) || null;
+  const useColor = Boolean(colorHex) && mode === "color";
+  const originalName = editor.dataset.originalName;
+  if (!originalName && (item.presets || []).some((preset) => preset.name === name)) {
+    if (!window.confirm(`マイセット「${name}」を上書きしますか？`)) return;
+  }
   setDeviceBusy(item, true, "マイセットを保存中...");
   try {
-    await requestJson(`/api/devices/${item.device_id}/presets`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+    const url = originalName
+      ? `/api/devices/${encodeURIComponent(item.device_id)}/presets/${encodeURIComponent(originalName)}`
+      : `/api/devices/${encodeURIComponent(item.device_id)}/presets`;
+    await requestJson(url, {
+      method: originalName ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name, brightness,
         color: useColor ? hexToRgb(colorHex) : null,
@@ -407,6 +494,7 @@ async function saveLightPreset(item, name, mode, editor) {
     });
     showToast(`マイセット「${name}」を保存しました。`);
     editor.hidden = true;
+    editor.dataset.originalName = "";
     await refreshStatus();
     setDeviceFeedback(item.device_id, `マイセット「${name}」を保存しました。`, "success");
   } catch (error) {
@@ -901,6 +989,33 @@ async function addRoom() {
   await refreshStatus();
 }
 
+async function moveRoom(room, direction) {
+  const currentIndex = availableRooms.indexOf(room);
+  const nextIndex = currentIndex + direction;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= availableRooms.length) return;
+  const rooms = [...availableRooms];
+  [rooms[currentIndex], rooms[nextIndex]] = [rooms[nextIndex], rooms[currentIndex]];
+  try {
+    const data = await requestJson("/api/rooms/order", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rooms }),
+    });
+    availableRooms = data.rooms;
+    await refreshStatus();
+    showToast("部屋の並び順を保存しました。");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const dark = theme === "dark";
+  themeButton.textContent = dark ? "☀️" : "🌙";
+  themeButton.setAttribute("aria-label", dark ? "ライトモードに切り替え" : "ダークモードに切り替え");
+}
+
 async function boot() {
   try {
     const health = await requestJson("/api/health");
@@ -927,4 +1042,10 @@ editModeButton.addEventListener("click", () => {
   editModeButton.textContent = editing ? "完了" : "編集";
   editModeButton.setAttribute("aria-pressed", String(editing));
 });
+themeButton.addEventListener("click", () => {
+  const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  localStorage.setItem("switchbot-theme", theme);
+  applyTheme(theme);
+});
+applyTheme(localStorage.getItem("switchbot-theme") || "light");
 boot();

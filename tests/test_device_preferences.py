@@ -80,3 +80,45 @@ def test_removes_light_preset_and_empty_device_entry(tmp_path):
     assert service.remove_preset("light-1", "存在しない") is False
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert "light-1" not in saved["light_presets"]
+
+
+def test_reorders_rooms(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}],
+                "rooms": ["未分類", "リビング", "寝室"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rooms = DevicePreferenceService(path).reorder_rooms(["リビング", "寝室", "未分類"])
+
+    assert rooms == ["リビング", "寝室", "未分類"]
+    assert json.loads(path.read_text(encoding="utf-8"))["rooms"] == rooms
+
+
+def test_updates_light_preset_in_place(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}],
+                "light_presets": {"light-1": [{"name": "読書", "brightness": 60}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = DevicePreferenceService(path)
+
+    result = service.update_preset(
+        "light-1", "読書", LightPresetUpdate(name="夜", brightness=25, color_temperature=2700)
+    )
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert result.name == "夜"
+    assert saved["light_presets"]["light-1"] == [
+        {"name": "夜", "brightness": 25, "color": None, "color_temperature": 2700}
+    ]
