@@ -13,6 +13,7 @@ class Settings:
     config_path: str = "config.json"
     host: str = "127.0.0.1"
     port: int = 8765
+    log_path: str = "logs/switchbot-local-launcher.log"
     force_control_error: bool = False
 
 
@@ -29,6 +30,7 @@ def load_settings() -> Settings:
         config_path=os.getenv("SWITCHBOT_CONFIG_PATH", "config.json"),
         host=os.getenv("SWITCHBOT_HOST", "127.0.0.1"),
         port=int(os.getenv("SWITCHBOT_PORT", "8765")),
+        log_path=os.getenv("SWITCHBOT_LOG_PATH", "logs/switchbot-local-launcher.log"),
         force_control_error=os.getenv("SWITCHBOT_FORCE_CONTROL_ERROR", "").strip().lower()
         in {"1", "true", "yes", "on"},
     )

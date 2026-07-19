@@ -1,10 +1,15 @@
+import logging
 import socket
 import threading
 
 import pytest
 
 from app.errors import LauncherError
-from app.runtime import ManagedServer, ensure_port_available
+from app.runtime import (
+    ManagedServer,
+    configure_rotating_logging,
+    ensure_port_available,
+)
 
 
 class FakeServer:
@@ -55,3 +60,16 @@ def test_port_conflict_has_user_friendly_message() -> None:
 
         with pytest.raises(LauncherError, match="既に使用されています"):
             ensure_port_available("127.0.0.1", port)
+
+
+def test_rotating_log_is_created_and_writable(tmp_path) -> None:
+    log_path = tmp_path / "logs" / "launcher.log"
+
+    config = configure_rotating_logging(log_path)
+    logging.getLogger("uvicorn.error").info("runtime test")
+    for handler in logging.getLogger("uvicorn").handlers:
+        handler.flush()
+
+    assert config["handlers"]["file"]["maxBytes"] == 1_048_576
+    assert config["handlers"]["file"]["backupCount"] == 5
+    assert "runtime test" in log_path.read_text(encoding="utf-8")

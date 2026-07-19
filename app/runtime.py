@@ -4,6 +4,8 @@ import socket
 import threading
 import time
 from collections.abc import Callable
+from logging.config import dictConfig
+from pathlib import Path
 from typing import Any, Protocol
 
 import uvicorn
@@ -34,6 +36,7 @@ class ManagedServer:
         startup_timeout: float = 10.0,
         shutdown_timeout: float = 10.0,
         server_factory: ServerFactory = uvicorn.Server,
+        log_config: dict[str, Any] | None = None,
     ) -> None:
         self._application = application
         self.host = host
@@ -41,6 +44,7 @@ class ManagedServer:
         self.startup_timeout = startup_timeout
         self.shutdown_timeout = shutdown_timeout
         self._server_factory = server_factory
+        self._log_config = log_config
         self._server: ServerProtocol | None = None
         self._thread: threading.Thread | None = None
 
@@ -69,6 +73,7 @@ class ManagedServer:
             host=self.host,
             port=self.port,
             reload=False,
+            log_config=self._log_config,
         )
         self._server = self._server_factory(config)
         self._thread = threading.Thread(
@@ -108,6 +113,10 @@ class ManagedServer:
             raise LauncherError("ローカルサーバーを正常に終了できませんでした。")
         self._clear_stopped_server()
 
+    def wait(self) -> None:
+        if self._thread is not None:
+            self._thread.join()
+
     def _clear_stopped_server(self) -> None:
         self._server = None
         self._thread = None
@@ -128,3 +137,57 @@ def ensure_port_available(host: str, port: int) -> None:
         raise LauncherError(
             f"{host}:{port} は既に使用されています。起動済みのアプリを確認してください。"
         ) from exc
+
+
+def configure_rotating_logging(log_path: str | Path) -> dict[str, Any]:
+    path = Path(log_path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    config: dict[str, Any] = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+            },
+            "access": {
+                "format": (
+                    '%(asctime)s %(levelname)s %(client_addr)s "%(request_line)s" '
+                    "%(status_code)s"
+                ),
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "default",
+                "stream": "ext://sys.stderr",
+            },
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "default",
+                "filename": str(path),
+                "maxBytes": 1_048_576,
+                "backupCount": 5,
+                "encoding": "utf-8",
+            },
+            "access_file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "access",
+                "filename": str(path),
+                "maxBytes": 1_048_576,
+                "backupCount": 5,
+                "encoding": "utf-8",
+            },
+        },
+        "loggers": {
+            "uvicorn": {"handlers": ["console", "file"], "level": "INFO", "propagate": False},
+            "uvicorn.error": {"level": "INFO"},
+            "uvicorn.access": {
+                "handlers": ["console", "access_file"],
+                "level": "INFO",
+                "propagate": False,
+            },
+        },
+    }
+    dictConfig(config)
+    return config

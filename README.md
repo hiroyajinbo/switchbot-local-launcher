@@ -28,6 +28,7 @@ Copy-Item config.example.json config.json
 SWITCHBOT_TOKEN=xxxx
 SWITCHBOT_SECRET=yyyy
 SWITCHBOT_CONFIG_PATH=config.json
+SWITCHBOT_LOG_PATH=logs/switchbot-local-launcher.log
 ```
 
 `config.json` に表示したいボタンを定義します。`.env` と `config.json` はGit管理しません。
@@ -62,6 +63,8 @@ python -m app
 
 起動後、ブラウザで `http://127.0.0.1:8765` を開きます。
 画面には操作ボタンに加えて、取得可能な環境情報とデバイス状態も表示されます。
+サーバーログは既定で `logs/switchbot-local-launcher.log` に保存され、1MBごとに最大5世代までローテーションします。
+保存先は `.env` の `SWITCHBOT_LOG_PATH` で変更できます。`Ctrl+C` で終了すると、サーバープロセスも停止します。
 
 PowerShellの実行ポリシーで `Activate.ps1` が使えない場合は、仮想環境を有効化せずに直接実行できます。
 

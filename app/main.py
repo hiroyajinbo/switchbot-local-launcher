@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
 from fastapi.responses import FileResponse, Response
@@ -26,6 +25,7 @@ from app.device_preferences import (
     RoomOrderUpdate,
 )
 from app.errors import ActionNotFoundError, LauncherError
+from app.runtime import ManagedServer, configure_rotating_logging
 from app.settings import Settings, load_settings
 from app.status import DeviceStatusService, DeviceStatusSnapshot
 from app.switchbot_client import SwitchBotClient, SwitchBotCredentials
@@ -326,4 +326,20 @@ def run() -> None:
         settings = load_settings()
     except LauncherError:
         settings = Settings(switchbot_token="", switchbot_secret="")
-    uvicorn.run("app.main:app", host=settings.host, port=settings.port, reload=False)
+    log_config = configure_rotating_logging(settings.log_path)
+    server = ManagedServer(
+        "app.main:app",
+        settings.host,
+        settings.port,
+        log_config=log_config,
+    )
+    try:
+        server.start()
+        server.wait()
+    except KeyboardInterrupt:
+        pass
+    except LauncherError as exc:
+        print(f"ERROR: {exc}")
+        raise SystemExit(1) from None
+    finally:
+        server.stop()
