@@ -67,9 +67,20 @@ def test_rotating_log_is_created_and_writable(tmp_path) -> None:
 
     config = configure_rotating_logging(log_path)
     logging.getLogger("uvicorn.error").info("runtime test")
-    for handler in logging.getLogger("uvicorn").handlers:
-        handler.flush()
+    logging.getLogger("uvicorn.access").info(
+        '%s - "%s %s HTTP/%s" %d',
+        "127.0.0.1:12345",
+        "GET",
+        "/api/health",
+        "1.1",
+        200,
+    )
+    for logger_name in ("uvicorn", "uvicorn.access"):
+        for handler in logging.getLogger(logger_name).handlers:
+            handler.flush()
 
     assert config["handlers"]["file"]["maxBytes"] == 1_048_576
     assert config["handlers"]["file"]["backupCount"] == 5
-    assert "runtime test" in log_path.read_text(encoding="utf-8")
+    contents = log_path.read_text(encoding="utf-8")
+    assert "runtime test" in contents
+    assert 'GET /api/health HTTP/1.1" 200' in contents

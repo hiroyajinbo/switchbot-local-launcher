@@ -152,7 +152,8 @@ def configure_rotating_logging(log_path: str | Path) -> dict[str, Any]:
                 "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
             },
             "access": {
-                "format": (
+                "()": "uvicorn.logging.AccessFormatter",
+                "fmt": (
                     '%(asctime)s %(levelname)s %(client_addr)s "%(request_line)s" '
                     "%(status_code)s"
                 ),
