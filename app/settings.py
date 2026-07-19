@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -17,8 +18,8 @@ class Settings:
     force_control_error: bool = False
 
 
-def load_settings() -> Settings:
-    load_dotenv()
+def load_settings(env_path: str | Path | None = None) -> Settings:
+    load_dotenv(dotenv_path=env_path)
     token = os.getenv("SWITCHBOT_TOKEN", "").strip()
     secret = os.getenv("SWITCHBOT_SECRET", "").strip()
     if not token or not secret:

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from app.data_paths import load_desktop_settings, prepare_desktop_data
 from app.errors import LauncherError
 from app.runtime import ManagedServer, configure_rotating_logging
-from app.settings import Settings, load_settings
+from app.settings import Settings
 from app.single_instance import SingleInstance
 
 WINDOW_TITLE = "SwitchBot Local Launcher"
@@ -46,9 +47,10 @@ def _run_desktop_window(
 ) -> None:
     if settings is None:
         try:
-            settings = load_settings()
-        except LauncherError:
-            settings = Settings(switchbot_token="", switchbot_secret="")
+            settings = load_desktop_settings(prepare_desktop_data())
+        except LauncherError as exc:
+            print(f"ERROR: {exc}")
+            raise SystemExit(1) from None
 
     if webview_module is None:
         try:
