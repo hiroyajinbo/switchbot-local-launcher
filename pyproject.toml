@@ -19,6 +19,14 @@ dev = [
   "ruff>=0.5.0",
 ]
 
+[project.scripts]
+switchbot-local-launcher = "app.main:run"
+switchbot-local-launcher-desktop = "app.desktop:run"
+desktop = [
+  "pywebview>=6.1",
+  "pyinstaller>=6.0",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -29,3 +37,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["web/*"]

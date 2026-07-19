@@ -53,6 +53,15 @@ python -m app
 
 `start.ps1` も用意していますが、Windowsの実行ポリシーによって拒否される環境があります。ポリシーを変更する必要はありません。その場合は `start.cmd` を使用してください。
 
+MVP3のPCアプリウィンドウを開く場合は、デスクトップ依存を導入してから `desktop.cmd` を実行します。
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,desktop]"
+.\desktop.cmd
+```
+
+ウィンドウを閉じると、内蔵ローカルサーバーも停止します。従来どおりブラウザで利用する場合は `start.cmd` を使用できます。
+
 別PCで更新された最新版を取り込み、依存関係も更新してから起動する場合は、次を実行します。
 
 ```powershell
