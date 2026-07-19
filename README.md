@@ -72,6 +72,23 @@ Windows GUIの基本動作は、次のスモークテストで自動確認でき
 
 既定では初回状態取得の完了を待つため、ウィンドウを15秒表示します。表示時間を変える場合は、例えば `desktop-smoke.cmd --hold-seconds 5` と指定します。ログ内のPython例外も失敗として検出します。
 
+## Windows PCアプリのビルド
+
+Pythonを意識せず起動できる `onedir` 形式のWindowsアプリは、次のコマンドで作成します。
+
+```powershell
+.\build-desktop.cmd
+```
+
+生成先は `dist\SwitchBotLocalLauncher\SwitchBotLocalLauncher.exe` です。`onedir` 形式のため、配布時はEXEだけでなく `SwitchBotLocalLauncher` フォルダ全体をコピーします。
+通常ビルドはキャッシュを利用します。リリース前などに中間生成物を破棄して作り直す場合は `build-desktop.cmd --clean` を使用します。
+
+ビルドから生成EXEのGUIスモークテストまでまとめて実行する場合は、次を使用します。
+
+```powershell
+.\desktop-package-smoke.cmd
+```
+
 別PCで更新された最新版を取り込み、依存関係も更新してから起動する場合は、次を実行します。
 
 ```powershell

@@ -8,4 +8,4 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 ".venv\Scripts\python.exe" scripts\desktop_smoke_test.py %*
-endlocal
+exit /b %errorlevel%

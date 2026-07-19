@@ -6,7 +6,7 @@ from app.data_paths import load_desktop_settings, prepare_desktop_data
 from app.errors import LauncherError
 from app.runtime import ManagedServer, configure_rotating_logging
 from app.settings import Settings
-from app.single_instance import SingleInstance
+from app.single_instance import SingleInstance, focus_window
 
 WINDOW_TITLE = "SwitchBot Local Launcher"
 
@@ -89,15 +89,8 @@ def _run_desktop_window(
 
 
 def focus_existing_window() -> None:
-    try:
-        from pywinauto import Desktop
-
-        window = Desktop(backend="uia").window(title=WINDOW_TITLE)
-        window.wait("visible", timeout=5)
-        window.restore()
-        window.set_focus()
-    except Exception as exc:  # GUI backends expose several platform-specific exceptions.
-        print(f"INFO: PCアプリは既に起動しています。既存ウィンドウを確認してください: {exc}")
+    if not focus_window(WINDOW_TITLE):
+        print("INFO: PCアプリは既に起動しています。既存ウィンドウを確認してください。")
 
 
 def run() -> None:

@@ -8,6 +8,7 @@ from app.errors import LauncherError
 
 ERROR_ALREADY_EXISTS = 183
 MUTEX_NAME = "Local\\SwitchBotLocalLauncher"
+SW_RESTORE = 9
 
 
 class Kernel32Protocol(Protocol):
@@ -74,3 +75,23 @@ def _load_kernel32() -> Kernel32Protocol:
     kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
     kernel32.CloseHandle.restype = ctypes.c_bool
     return kernel32
+
+
+def focus_window(title: str, user32: Any | None = None) -> bool:
+    if user32 is None:
+        try:
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+        except (AttributeError, OSError):
+            return False
+        user32.FindWindowW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p]
+        user32.FindWindowW.restype = ctypes.c_void_p
+        user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        user32.ShowWindow.restype = ctypes.c_bool
+        user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
+        user32.SetForegroundWindow.restype = ctypes.c_bool
+
+    handle = user32.FindWindowW(None, title)
+    if not handle:
+        return False
+    user32.ShowWindow(handle, SW_RESTORE)
+    return bool(user32.SetForegroundWindow(handle))

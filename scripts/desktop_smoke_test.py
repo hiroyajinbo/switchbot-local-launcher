@@ -18,10 +18,14 @@ WINDOW_TITLE = "SwitchBot Local Launcher"
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 
 
-def wait_for_health(timeout: float) -> None:
+def wait_for_health(timeout: float, process: subprocess.Popen) -> None:
     deadline = time.monotonic() + timeout
     last_error: Exception | None = None
     while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(
+                f"PCアプリがヘルスAPI応答前に終了しました（終了コード: {process.returncode}）。"
+            )
         try:
             with urlopen(f"http://{HOST}:{PORT}/api/health", timeout=1) as response:
                 if response.status == 200:
@@ -44,17 +48,22 @@ def ensure_port_released(timeout: float) -> None:
     raise RuntimeError(f"終了後も{HOST}:{PORT}が使用されています。")
 
 
-def run_smoke_test(hold_seconds: float) -> None:
+def run_smoke_test(
+    hold_seconds: float,
+    executable: Path | None = None,
+    startup_timeout: float = 60.0,
+) -> None:
     ensure_port_released(1)
+    command = [str(executable)] if executable else [sys.executable, "-m", "app.desktop"]
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as output:
         process = subprocess.Popen(
-            [sys.executable, "-m", "app.desktop"],
+            command,
             cwd=PROJECT_DIR,
             stdout=output,
             stderr=subprocess.STDOUT,
         )
         try:
-            wait_for_health(30)
+            wait_for_health(startup_timeout, process)
             window = Desktop(backend="uia").window(title=WINDOW_TITLE)
             window.wait("visible enabled ready", timeout=30)
             rectangle = window.rectangle()
@@ -63,7 +72,7 @@ def run_smoke_test(hold_seconds: float) -> None:
                 f"({rectangle.width()}x{rectangle.height()}, PID={process.pid})"
             )
             duplicate = subprocess.run(
-                [sys.executable, "-m", "app.desktop"],
+                command,
                 cwd=PROJECT_DIR,
                 capture_output=True,
                 text=True,
@@ -89,6 +98,12 @@ def run_smoke_test(hold_seconds: float) -> None:
             if "--- Logging error ---" in logs or "Traceback (most recent call last)" in logs:
                 raise RuntimeError(f"PCアプリのログに例外が記録されました。\n{logs}")
             print("OK: ウィンドウ終了後にプロセスとポートが解放されました。")
+        except Exception as exc:
+            output.seek(0)
+            logs = output.read()
+            if logs:
+                raise RuntimeError(f"{exc}\n--- PCアプリ出力 ---\n{logs}") from exc
+            raise
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -107,8 +122,22 @@ def main() -> None:
         default=15.0,
         help="検出したウィンドウを表示しておく秒数（既定: 15秒）",
     )
+    parser.add_argument(
+        "--startup-timeout",
+        type=float,
+        default=60.0,
+        help="ヘルスAPIの起動待ち秒数（既定: 60秒）",
+    )
+    parser.add_argument(
+        "--executable",
+        type=Path,
+        help="検証するビルド済みEXE（省略時はPythonモジュールを起動）",
+    )
     args = parser.parse_args()
-    run_smoke_test(args.hold_seconds)
+    executable = args.executable.resolve() if args.executable else None
+    if executable and not executable.exists():
+        parser.error(f"EXEが見つかりません: {executable}")
+    run_smoke_test(args.hold_seconds, executable, args.startup_timeout)
 
 
 if __name__ == "__main__":
