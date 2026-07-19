@@ -33,6 +33,11 @@ class ApplyCandidatesResult(BaseModel):
     restart_required: bool = True
 
 
+class ButtonAppearanceUpdate(BaseModel):
+    icon: str
+    icon_badge: str
+
+
 class ConfigSyncService:
     def __init__(self, config_path: Path, client: SwitchBotClient) -> None:
         self._config_path = config_path
@@ -111,6 +116,25 @@ class ConfigSyncService:
                 item["locked"] = locked
         self._write(raw)
         return {"id": button_id, "locked": locked}
+
+    def set_button_appearance(
+        self, button_id: str, update: ButtonAppearanceUpdate
+    ) -> dict[str, Any]:
+        config = load_config(self._config_path)
+        if config.get_button(button_id) is None:
+            raise ConfigError(f"未定義のボタンIDです: {button_id}")
+        raw = config.model_dump()
+        for item in raw["buttons"]:
+            if item["id"] == button_id:
+                item["icon"] = update.icon
+                item["icon_badge"] = update.icon_badge
+        self._write(raw)
+        saved = load_config(self._config_path).get_button(button_id)
+        return {
+            "id": button_id,
+            "icon": saved.icon,
+            "icon_badge": saved.icon_badge,
+        }
 
     def remove_buttons(self, ids: list[str]) -> dict[str, int]:
         config = load_config(self._config_path)

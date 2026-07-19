@@ -1,5 +1,6 @@
 import pytest
 
+from app.errors import SwitchBotApiError
 from app.status import DeviceStatusService
 
 
@@ -65,3 +66,25 @@ async def test_status_snapshot_splits_environment_and_devices():
     }
     assert snapshot.remotes[0]["label"] == "Air Conditioner"
     assert snapshot.remotes[0]["summary"].startswith("状態取得対象外")
+
+
+@pytest.mark.asyncio
+async def test_status_snapshot_keeps_last_device_state_on_temporary_error():
+    client = FakeSwitchBotClient()
+    service = DeviceStatusService(client)
+    await service.snapshot()
+    original_get_status = client.get_device_status
+
+    async def fail_light(device_id):
+        if device_id == "light-1":
+            raise SwitchBotApiError("temporary error")
+        return await original_get_status(device_id)
+
+    client.get_device_status = fail_light
+    snapshot = await service.snapshot()
+
+    assert snapshot.devices[0]["device_id"] == "light-1"
+    assert snapshot.devices[0]["summary"] == "power on"
+    assert snapshot.devices[0]["stale"] is True
+    assert snapshot.devices[0]["status_error"] == "temporary error"
+    assert snapshot.errors[0]["device_id"] == "light-1"

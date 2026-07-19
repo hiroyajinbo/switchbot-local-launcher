@@ -6,6 +6,15 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.errors import ConfigError
 
+QuickIcon = Literal[
+    "scene", "light", "strip_light", "plug", "bot", "lock", "climate", "fan",
+    "monitor", "game", "computer", "bath", "kettle", "door", "curtain", "speaker",
+    "tv", "appliance", "other",
+]
+QuickIconBadge = Literal[
+    "none", "up", "down", "left", "right", "on", "off", "power", "play", "pause",
+    "plus", "minus", "toggle",
+]
 
 class DeviceCommandButton(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -19,6 +28,8 @@ class DeviceCommandButton(BaseModel):
     parameter: str = "default"
     command_type: str = "command"
     locked: bool = False
+    icon: QuickIcon = "other"
+    icon_badge: QuickIconBadge = "none"
 
 
 class SceneButton(BaseModel):
@@ -30,6 +41,8 @@ class SceneButton(BaseModel):
     type: Literal["scene"]
     scene_id: Annotated[str, Field(min_length=1)]
     locked: bool = False
+    icon: QuickIcon = "scene"
+    icon_badge: QuickIconBadge = "none"
 
 
 Button = Annotated[DeviceCommandButton | SceneButton, Field(discriminator="type")]

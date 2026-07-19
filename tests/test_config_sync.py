@@ -3,7 +3,7 @@ import json
 import pytest
 
 from app.config import load_config
-from app.config_sync import ConfigSyncService
+from app.config_sync import ButtonAppearanceUpdate, ConfigSyncService
 from app.errors import ConfigError
 
 
@@ -98,3 +98,27 @@ async def test_removes_selected_stale_button(tmp_path):
 
     assert result == {"removed": 1}
     assert [button.id for button in load_config(config_path).buttons] == ["valid"]
+
+
+def test_updates_button_appearance(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {"id": "fan_up", "label": "Fan", "type": "scene", "scene_id": "scene-1"}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, FakeClient())
+
+    result = service.set_button_appearance(
+        "fan_up", ButtonAppearanceUpdate(icon="fan", icon_badge="up")
+    )
+
+    assert result == {"id": "fan_up", "icon": "fan", "icon_badge": "up"}
+    button = load_config(config_path).buttons[0]
+    assert button.icon == "fan"
+    assert button.icon_badge == "up"

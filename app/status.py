@@ -27,6 +27,7 @@ class DeviceStatusService:
     def __init__(self, switchbot_client: SwitchBotClient, config_path: Path | None = None) -> None:
         self._switchbot_client = switchbot_client
         self._config_path = config_path
+        self._last_status_items: dict[str, dict[str, Any]] = {}
 
     async def snapshot(self) -> DeviceStatusSnapshot:
         devices_response = await self._switchbot_client.get_devices()
@@ -50,6 +51,9 @@ class DeviceStatusService:
                         "message": str(exc),
                     }
                 )
+                cached = self._last_status_items.get(device_id)
+                if cached is not None:
+                    status_items.append(dict(cached, stale=True, status_error=str(exc)))
                 continue
             body = status_response.get("body", {})
             item = _format_device_status(device, body, self._preference(device, body))
@@ -57,6 +61,7 @@ class DeviceStatusService:
                 presets = load_config(self._config_path).light_presets.get(device_id, [])
                 item["presets"] = [preset.model_dump() for preset in presets]
             status_items.append(item)
+            self._last_status_items[device_id] = item
 
         return DeviceStatusSnapshot(
             checked_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

@@ -17,6 +17,10 @@ class FakeSwitchBotClient:
         self.calls.append(("scene", scene_id))
         return {"statusCode": 100}
 
+    async def get_scenes(self):
+        self.calls.append(("get_scenes",))
+        return {"statusCode": 100, "body": [{"sceneId": "scene-1"}]}
+
 
 @pytest.mark.asyncio
 async def test_execute_device_command():
@@ -84,3 +88,26 @@ async def test_locked_scene_is_not_executed():
     with pytest.raises(LauncherError, match="操作ロック"):
         await executor.execute("dangerous")
     assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_missing_scene_is_not_executed():
+    config = LauncherConfig.model_validate(
+        {
+            "buttons": [
+                {
+                    "id": "missing_scene",
+                    "label": "存在しないシーン",
+                    "type": "scene",
+                    "scene_id": "missing",
+                }
+            ]
+        }
+    )
+    client = FakeSwitchBotClient()
+    executor = ActionExecutor(config, client)
+
+    with pytest.raises(ActionNotFoundError, match="現在のシーン一覧にありません"):
+        await executor.execute("missing_scene")
+
+    assert client.calls == [("get_scenes",)]

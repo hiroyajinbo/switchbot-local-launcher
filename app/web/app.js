@@ -24,6 +24,21 @@ const executionHistory = [];
 const pendingDeviceDetails = new Map();
 let statusRefreshTimer = null;
 let availableRooms = ["未分類"];
+let latestStatusSnapshot = null;
+let currentButtons = [];
+let roomEditBusy = false;
+const quickIconOptions = {
+  scene: "シーン", light: "照明", strip_light: "テープライト", plug: "プラグ",
+  bot: "Bot", lock: "鍵", climate: "空調", fan: "扇風機", monitor: "モニター",
+  game: "ゲーム", computer: "パソコン", bath: "お風呂", kettle: "ポット",
+  door: "ドア", curtain: "カーテン", speaker: "スピーカー", tv: "テレビ",
+  appliance: "家電", other: "その他",
+};
+const quickBadgeOptions = {
+  none: "なし", up: "上", down: "下", left: "左", right: "右", on: "ON",
+  off: "OFF", power: "電源", play: "再生", pause: "停止", plus: "＋",
+  minus: "－", toggle: "切替",
+};
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -99,6 +114,7 @@ async function executeAction(button) {
 }
 
 function renderButtons(buttons) {
+  currentButtons = buttons;
   buttonList.replaceChildren();
   buttons = buttons.filter((button) => button.type === "scene");
   const groups = new Map();
@@ -119,7 +135,10 @@ function renderButtons(buttons) {
       const element = document.createElement("button");
       element.className = "action-button";
       element.type = "button";
-      element.textContent = button.label;
+      const icon = quickActionIcon(button.icon || "scene", button.icon_badge || "none");
+      const label = document.createElement("span");
+      label.textContent = button.label;
+      element.append(icon, label);
       element.disabled = button.locked;
       element.addEventListener("click", () => executeAction(button));
       const lock = document.createElement("button");
@@ -128,7 +147,7 @@ function renderButtons(buttons) {
       lock.title = button.locked ? "シーンのロックを解除" : "シーンをロック";
       lock.innerHTML = svgIcon(button.locked ? "locked" : "unlocked");
       lock.addEventListener("click", () => setSceneLock(button.id, !button.locked));
-      wrapper.append(element, lock);
+      wrapper.append(element, lock, buttonAppearanceEditor(button));
       toolbar.append(wrapper);
     });
     section.append(heading, toolbar);
@@ -155,6 +174,7 @@ async function setSceneLock(buttonId, locked) {
 }
 
 function renderStatus(snapshot) {
+  latestStatusSnapshot = snapshot;
   statusCheckedAt.textContent = `更新: ${snapshot.checked_at}`;
   statusCheckedAt.classList.remove("error-text");
   renderEnvironment(snapshot.environment || []);
@@ -220,37 +240,46 @@ function renderDevices(items, errors) {
     headingRow.className = "room-heading";
     const heading = document.createElement("h3");
     heading.textContent = room;
-    const orderControls = document.createElement("div");
-    orderControls.className = "room-order-controls edit-only";
-    const up = controlButton("↑", () => moveRoom(room, -1));
-    up.title = `${room}を上へ移動`;
-    up.disabled = availableRooms.indexOf(room) <= 0;
-    const down = controlButton("↓", () => moveRoom(room, 1));
-    down.title = `${room}を下へ移動`;
-    const configuredIndex = availableRooms.indexOf(room);
-    down.disabled = configuredIndex < 0 || configuredIndex >= availableRooms.length - 1;
-    orderControls.append(up, down);
-    headingRow.append(heading, orderControls);
+    headingRow.append(heading, roomActionMenu(room));
     const grid = document.createElement("div");
     grid.className = "room-device-grid";
     section.append(headingRow, grid);
     roomItems.forEach((item) => {
     const element = document.createElement("div");
-    element.className = `device-row${item.locked ? " locked" : ""}`;
+    element.className = `device-row${item.locked ? " locked" : ""}${item.stale ? " stale-row" : ""}`;
     element.dataset.deviceId = item.device_id;
     const details = detailList(item.details);
-    if (item.controls?.power) details.querySelector('[data-detail-key="power"]')?.remove();
+    const controlledDetails = {
+      power: "power",
+      brightness: "brightness",
+      color: "color",
+      color_temperature: "colorTemperature",
+    };
+    Object.entries(controlledDetails).forEach(([control, detail]) => {
+      if (item.controls?.[control]) details.querySelector(`[data-detail-key="${detail}"]`)?.remove();
+    });
+    if (item.controls?.press) {
+      details.querySelector('[data-detail-key="power"]')?.remove();
+      details.querySelector('[data-detail-key="deviceMode"]')?.remove();
+    }
     if (item.controls?.power || item.controls?.brightness || item.controls?.press) {
       details.append(deviceControls(item));
     }
     details.append(preferenceControls(item));
+    if (item.stale) {
+      const warning = document.createElement("div");
+      warning.className = "device-status-warning";
+      warning.textContent = "最新状態を取得できなかったため、直前の状態を表示しています。";
+      details.append(warning);
+    }
     element.append(deviceMainWithIcon(item), details);
     grid.append(element);
     });
     deviceStatusList.append(section);
   });
 
-  errors.forEach((error) => {
+  const displayedIds = new Set(items.map((item) => item.device_id));
+  errors.filter((error) => !displayedIds.has(error.device_id)).forEach((error) => {
     const element = document.createElement("div");
     element.className = "device-row error-row";
     element.append(deviceMain(error.label, "取得不可", error.message));
@@ -270,10 +299,10 @@ function deviceControls(item) {
     toggle.setAttribute("aria-checked", String(power));
     toggle.innerHTML = `<span></span><strong>${power ? "ON" : "OFF"}</strong>`;
     toggle.addEventListener("click", () => controlDevice(item, power ? "turn_off" : "turn_on"));
-    controls.append(toggle);
+    controls.append(controlField("電源", toggle));
   }
   if (item.controls.press) {
-    controls.append(controlButton("押す", () => controlDevice(item, "press")));
+    controls.append(controlField("操作", controlButton("押す", () => controlDevice(item, "press"))));
   }
   if (item.controls.brightness) {
     const brightness = item.details.find((detail) => detail.key === "brightness")?.value || 50;
@@ -296,7 +325,7 @@ function deviceControls(item) {
       });
       if (succeeded) range.dataset.committedValue = String(next);
     });
-    controls.append(range, value);
+    controls.append(controlField("明るさ", range, value));
   }
   if (item.controls.color) {
     const color = document.createElement("input");
@@ -314,7 +343,7 @@ function deviceControls(item) {
       });
       if (succeeded) color.dataset.committedValue = next;
     });
-    controls.append(color);
+    controls.append(controlField("色", color));
   }
   if (item.controls.color_temperature) {
     const temperature = document.createElement("input");
@@ -339,7 +368,7 @@ function deviceControls(item) {
       });
       if (succeeded) temperature.dataset.committedValue = String(next);
     });
-    controls.append(temperature, value);
+    controls.append(controlField("色温度", temperature, value));
   }
   if (item.controls.brightness) {
     const presets = document.createElement("div");
@@ -380,6 +409,21 @@ function deviceControls(item) {
     controls.querySelectorAll("button, input").forEach((element) => { element.disabled = true; });
   }
   return controls;
+}
+
+function controlField(label, ...elements) {
+  const field = document.createElement("div");
+  field.className = "device-control-field";
+  const controlName = {
+    "電源": "power", "操作": "action", "明るさ": "brightness",
+    "色温度": "temperature", "色": "color",
+  }[label];
+  if (controlName) field.classList.add(`device-control-${controlName}`);
+  const name = document.createElement("span");
+  name.className = "device-control-label";
+  name.textContent = label;
+  field.append(name, ...elements);
+  return field;
 }
 
 function createLightPresetEditor(item) {
@@ -586,12 +630,16 @@ function preferenceControls(item) {
   lock.setAttribute("aria-label", lock.title);
   lock.innerHTML = svgIcon(item.locked ? "locked" : "unlocked");
   lock.addEventListener("click", () => savePreference(item, { locked: !item.locked }));
-  controls.append(room, lock);
+  const saveStatus = document.createElement("span");
+  saveStatus.className = "preference-save-status";
+  saveStatus.setAttribute("aria-live", "polite");
+  controls.append(room, lock, saveStatus);
   return controls;
 }
 
 function deviceMainWithIcon(item) {
-  const wrapper = deviceMain(item.label, item.type, item.summary);
+  const wrapper = deviceMain(item.label, item.type, friendlyDeviceStatus(item));
+  wrapper.querySelector(".device-meta").title = `${item.type} / ${item.summary}`;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "device-icon-button";
@@ -622,6 +670,7 @@ function iconPicker(item) {
 
 function svgIcon(icon) {
   const paths = {
+    scene: '<path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="8"/>',
     light: '<path d="M9 18h6M10 22h4M8 14a7 7 0 1 1 8 0c-1 1-1 2-1 2H9s0-1-1-2Z"/>',
     strip_light: '<path d="M4 7h14a3 3 0 0 1 0 6H8a2 2 0 0 0 0 4h12"/><circle cx="4" cy="7" r="1"/>',
     plug: '<path d="M8 3v6m8-6v6M6 9h12v2a6 6 0 0 1-6 6v4"/>',
@@ -630,6 +679,16 @@ function svgIcon(icon) {
     lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     hub: '<rect x="4" y="6" width="16" height="12" rx="3"/><path d="M8 13h8M12 9v8"/>',
     climate: '<path d="M7 5h10M5 9h14M7 13h10M9 17h6"/><path d="M4 3v16h16V3"/>',
+    fan: '<circle cx="12" cy="12" r="2"/><path d="M12 10c-1-5 2-7 5-5 2 2 0 6-3 7M10 12c-5 1-7-2-5-5 2-2 6 0 7 3M12 14c1 5-2 7-5 5-2-2 0-6 3-7"/>',
+    monitor: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+    game: '<path d="M8 8h8a6 6 0 0 1 5 7l-1 3a2 2 0 0 1-3 1l-3-2h-4l-3 2a2 2 0 0 1-3-1l-1-3a6 6 0 0 1 5-7Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 2h.01"/>',
+    computer: '<rect x="4" y="3" width="16" height="13" rx="2"/><path d="M8 21h8M12 16v5"/>',
+    bath: '<path d="M3 12h18v2a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6v-2Z"/><path d="M7 12V6a3 3 0 0 1 6 0"/>',
+    kettle: '<path d="M6 7h10v12H6Z"/><path d="M16 9h2a3 3 0 0 1 0 6h-2M8 4h6"/>',
+    door: '<path d="M5 21V3h14v18M9 21V7h7v14"/><circle cx="14" cy="14" r=".5"/>',
+    curtain: '<path d="M4 4h16M6 4v16m12-16v16M6 20c4-4 4-12 0-16m12 16c-4-4-4-12 0-16"/>',
+    speaker: '<rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="14" r="4"/><circle cx="12" cy="7" r="1"/>',
+    tv: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m9 2 3 3 3-3"/>',
     appliance: '<rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="13" r="4"/><path d="M8 7h1m2 0h1"/>',
     other: '<path d="M12 3 3 9v10h18V9l-9-6Z"/><path d="M9 19v-6h6v6"/>',
     locked: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
@@ -639,15 +698,192 @@ function svgIcon(icon) {
 }
 
 async function savePreference(item, changes) {
+  const previousSnapshot = cloneSnapshot(latestStatusSnapshot);
+  const current = latestStatusSnapshot?.devices?.find(
+    (device) => device.device_id === item.device_id,
+  );
+  if (current) Object.assign(current, changes);
+  if (latestStatusSnapshot) renderStatus(latestStatusSnapshot);
+  setPreferenceSaving(current || item, true);
   try {
     await requestJson(`/api/devices/${item.device_id}/preference`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ room: item.room || "未分類", icon: item.icon, locked: item.locked, ...changes }),
     });
-    await refreshStatus();
+    setPreferenceSaving(current || item, false);
+    showToast("デバイス設定を保存しました。");
   } catch (error) {
+    if (previousSnapshot) renderStatus(previousSnapshot);
     setResult(error.message, new Date().toLocaleString("ja-JP"), true);
+    showToast(error.message, true);
   }
+}
+
+function cloneSnapshot(snapshot) {
+  return snapshot ? JSON.parse(JSON.stringify(snapshot)) : null;
+}
+
+function roomActionMenu(room) {
+  const menu = document.createElement("details");
+  menu.className = "room-action-menu edit-only";
+  const trigger = document.createElement("summary");
+  trigger.textContent = "…";
+  trigger.title = `${room}のメニュー`;
+  trigger.setAttribute("aria-label", trigger.title);
+  const panel = document.createElement("div");
+  panel.className = "room-action-panel";
+  const index = availableRooms.indexOf(room);
+  const up = controlButton("↑ 上へ移動", () => moveRoom(room, -1));
+  up.disabled = roomEditBusy || index <= 0;
+  const down = controlButton("↓ 下へ移動", () => moveRoom(room, 1));
+  down.disabled = roomEditBusy || index < 0 || index >= availableRooms.length - 1;
+  panel.append(up, down);
+  if (room !== "未分類") {
+    const remove = controlButton("部屋を削除", () => removeRoom(room));
+    remove.classList.add("room-remove");
+    remove.disabled = roomEditBusy;
+    panel.append(remove);
+  }
+  menu.append(trigger, panel);
+  return menu;
+}
+
+function quickActionIcon(icon, badge) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "quick-action-icon";
+  wrapper.innerHTML = svgIcon(icon);
+  if (badge && badge !== "none") {
+    const marker = document.createElement("span");
+    marker.className = "quick-action-badge";
+    marker.innerHTML = badgeVisual(badge);
+    wrapper.append(marker);
+  }
+  return wrapper;
+}
+
+function friendlyDeviceStatus(item) {
+  const details = Object.fromEntries((item.details || []).map((detail) => [detail.key, detail.value]));
+  if (details.deviceMode === "pressMode") return "押すモード";
+  if (details.power === "on") return "オン";
+  if (details.power === "off") return "オフ";
+  if (details.lockState) return details.lockState === "locked" ? "施錠中" : "解錠中";
+  if (details.openState) return details.openState === "open" ? "開いています" : "閉じています";
+  if (details.temperature !== undefined) return `${details.temperature}℃ / 湿度 ${details.humidity}%`;
+  return "状態情報なし";
+}
+
+function buttonAppearanceEditor(button) {
+  const editor = document.createElement("details");
+  editor.className = "scene-appearance-editor edit-only";
+  let selectedIcon = button.icon || "scene";
+  let selectedBadge = button.icon_badge || "none";
+  const summary = document.createElement("summary");
+  summary.append(quickActionIcon(selectedIcon, selectedBadge), document.createTextNode("アイコン設定"));
+  const panel = document.createElement("div");
+  panel.className = "scene-appearance-panel";
+  const iconTitle = document.createElement("strong");
+  iconTitle.textContent = "ベースアイコン";
+  const iconGrid = document.createElement("div");
+  iconGrid.className = "appearance-choice-grid icon-choice-grid";
+  const badgeTitle = document.createElement("strong");
+  badgeTitle.textContent = "操作バッジ";
+  const badgeGrid = document.createElement("div");
+  badgeGrid.className = "appearance-choice-grid badge-choice-grid";
+
+  const refreshSelection = () => {
+    iconGrid.querySelectorAll("button").forEach((choice) => {
+      choice.classList.toggle("selected", choice.dataset.value === selectedIcon);
+    });
+    badgeGrid.querySelectorAll("button").forEach((choice) => {
+      choice.classList.toggle("selected", choice.dataset.value === selectedBadge);
+    });
+    summary.replaceChildren(
+      quickActionIcon(selectedIcon, selectedBadge),
+      document.createTextNode("アイコン設定"),
+    );
+  };
+
+  Object.entries(quickIconOptions).forEach(([value, label]) => {
+    const choice = appearanceChoice(label, value, svgIcon(value));
+    choice.addEventListener("click", () => { selectedIcon = value; refreshSelection(); });
+    iconGrid.append(choice);
+  });
+  Object.entries(quickBadgeOptions).forEach(([value, label]) => {
+    const visual = `<span class="badge-choice-symbol">${badgeVisual(value) || "なし"}</span>`;
+    const choice = appearanceChoice(label, value, visual);
+    choice.addEventListener("click", () => { selectedBadge = value; refreshSelection(); });
+    badgeGrid.append(choice);
+  });
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "appearance-apply-button";
+  apply.textContent = "適用";
+  apply.addEventListener("click", () => setButtonAppearance(button, selectedIcon, selectedBadge));
+  panel.append(iconTitle, iconGrid, badgeTitle, badgeGrid, apply);
+  editor.append(summary, panel);
+  refreshSelection();
+  return editor;
+}
+
+function appearanceChoice(label, value, visual) {
+  const choice = document.createElement("button");
+  choice.type = "button";
+  choice.dataset.value = value;
+  choice.title = label;
+  choice.setAttribute("aria-label", label);
+  choice.innerHTML = visual;
+  const text = document.createElement("small");
+  text.textContent = label;
+  choice.append(text);
+  return choice;
+}
+
+function badgeVisual(badge) {
+  if (badge === "on" || badge === "off") return `<span>${badge.toUpperCase()}</span>`;
+  const paths = {
+    up: '<path d="m3 7 5-5 5 5M8 2v12"/>',
+    down: '<path d="m3 9 5 5 5-5M8 14V2"/>',
+    left: '<path d="m7 3-5 5 5 5M2 8h12"/>',
+    right: '<path d="m9 3 5 5-5 5M14 8H2"/>',
+    power: '<path d="M8 1v7M4 3.5a6 6 0 1 0 8 0"/>',
+    play: '<path d="m5 2 8 6-8 6Z"/>',
+    pause: '<path d="M4 3h3v10H4zm5 0h3v10H9z"/>',
+    plus: '<path d="M8 2v12M2 8h12"/>',
+    minus: '<path d="M2 8h12"/>',
+    toggle: '<path d="m5 3-3 3 3 3M2 6h12m-3 1 3 3-3 3"/>',
+  };
+  return paths[badge]
+    ? `<svg viewBox="0 0 16 16" aria-hidden="true">${paths[badge]}</svg>`
+    : "";
+}
+
+async function setButtonAppearance(button, icon, iconBadge) {
+  const previous = { icon: button.icon || "scene", icon_badge: button.icon_badge || "none" };
+  button.icon = icon;
+  button.icon_badge = iconBadge;
+  renderButtons(currentButtons);
+  try {
+    await requestJson(`/api/buttons/${button.id}/appearance`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ icon, icon_badge: iconBadge }),
+    });
+    showToast("クイック操作のアイコンを保存しました。");
+  } catch (error) {
+    Object.assign(button, previous);
+    renderButtons(currentButtons);
+    showToast(error.message, true);
+  }
+}
+
+function setPreferenceSaving(item, saving) {
+  const row = document.querySelector(`[data-device-id="${CSS.escape(item.device_id)}"]`);
+  if (!row) return;
+  row.classList.toggle("preference-saving", saving);
+  row.querySelectorAll(".preference-controls button, .preference-controls select").forEach((element) => {
+    element.disabled = saving || item.locked;
+  });
+  const status = row.querySelector(".preference-save-status");
+  if (status) status.textContent = saving ? "保存中..." : "";
 }
 
 function controlButton(label, handler) {
@@ -660,8 +896,14 @@ function controlButton(label, handler) {
 }
 
 async function controlDevice(item, action, value = null, rollback = null) {
+  const optimistic = optimisticDeviceDetail(action, value);
+  const previousSnapshot = cloneSnapshot(latestStatusSnapshot);
+  if (optimistic) {
+    setPendingDeviceDetail(item.device_id, optimistic.key, optimistic.value);
+    if (latestStatusSnapshot) renderStatus(latestStatusSnapshot);
+  }
   setDeviceBusy(item, true, `${operationLabel(action)}を操作中...`);
-  setResult(`${item.label} 操作中...`);
+  setResult(`${item.label} 送信中...`);
   try {
     const result = await requestJson(`/api/devices/${item.device_id}/control`, {
       method: "POST",
@@ -672,26 +914,16 @@ async function controlDevice(item, action, value = null, rollback = null) {
     setResult(result.message, time);
     addHistory(item.label, result.message, time);
     setDeviceFeedback(item.device_id, result.message, "success");
-    const detailKey = ({
-      turn_on: "power",
-      turn_off: "power",
-      set_brightness: "brightness",
-      set_color: "color",
-      set_color_temperature: "colorTemperature",
-    })[action];
-    if (detailKey) {
-      const detailValue = action === "turn_on" ? "on" : action === "turn_off" ? "off" : value;
-      setPendingDeviceDetail(item.device_id, detailKey, detailValue);
-    }
     if (action === "set_brightness") {
-      updateDisplayedBrightness(item.device_id, value);
       scheduleStatusRefresh(5000);
     } else {
       scheduleStatusRefresh(2000);
     }
     return true;
   } catch (error) {
-    rollback?.();
+    if (optimistic) removePendingDeviceDetail(item.device_id, optimistic.key);
+    if (previousSnapshot) renderStatus(previousSnapshot);
+    else rollback?.();
     const time = new Date().toLocaleString("ja-JP");
     setResult(error.message, time, true);
     addHistory(item.label, error.message, time, true);
@@ -740,6 +972,14 @@ function setPendingDeviceDetail(deviceId, key, value) {
   pendingDeviceDetails.set(deviceId, pending);
 }
 
+function removePendingDeviceDetail(deviceId, key) {
+  const pending = pendingDeviceDetails.get(deviceId);
+  if (!pending) return;
+  delete pending[key];
+  if (Object.keys(pending).length === 0) pendingDeviceDetails.delete(deviceId);
+  else pendingDeviceDetails.set(deviceId, pending);
+}
+
 function applyPendingDeviceDetails(item) {
   const pending = pendingDeviceDetails.get(item.device_id);
   if (!pending) return item;
@@ -767,13 +1007,6 @@ function scheduleStatusRefresh(delay) {
     statusRefreshTimer = null;
     refreshStatus();
   }, delay);
-}
-
-function updateDisplayedBrightness(deviceId, brightness) {
-  const row = document.querySelector(`[data-device-id="${CSS.escape(deviceId)}"]`);
-  if (!row) return;
-  const pill = row.querySelector('[data-detail-key="brightness"]');
-  if (pill) pill.textContent = `明るさ: ${brightness}`;
 }
 
 function renderRemotes(items) {
@@ -859,7 +1092,11 @@ function formatDetail(detail) {
   };
   const label = labels[detail.key] || detail.key;
   const suffix = suffixes[detail.key] || "";
-  return `${label}: ${detail.value}${suffix}`;
+  const translated = {
+    on: "オン", off: "オフ", pressMode: "押すモード", switchMode: "スイッチモード",
+    open: "開", close: "閉", locked: "施錠", unlocked: "解錠",
+  }[String(detail.value)] || detail.value;
+  return `${label}: ${translated}${suffix}`;
 }
 
 function emptyText(message) {
@@ -956,7 +1193,11 @@ async function applyCandidates() {
 async function refreshStatus() {
   refreshStatusButton.disabled = true;
   try {
-    const snapshot = await requestJson("/api/status");
+    const [snapshot, roomData] = await Promise.all([
+      requestJson("/api/status"),
+      requestJson("/api/rooms"),
+    ]);
+    availableRooms = roomData.rooms || ["未分類"];
     renderStatus(snapshot);
   } catch (error) {
     const hasPreviousStatus = Boolean(statusCheckedAt.textContent);
@@ -979,22 +1220,47 @@ async function loadRooms() {
 
 async function addRoom() {
   const room = newRoomName.value.trim();
-  if (!room) return;
-  const data = await requestJson("/api/rooms", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ room }),
-  });
-  availableRooms = data.rooms;
+  if (!room || roomEditBusy) return;
+  const previousRooms = [...availableRooms];
+  if (!availableRooms.includes(room)) availableRooms = [...availableRooms, room];
   newRoomName.value = "";
-  await refreshStatus();
+  setRoomEditBusy(true);
+  try {
+    const data = await requestJson("/api/rooms", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room }),
+    });
+    availableRooms = data.rooms;
+    setRoomEditBusy(false);
+    showToast(`${room}を追加しました。`);
+  } catch (error) {
+    availableRooms = previousRooms;
+    setRoomEditBusy(false);
+    showToast(error.message, true);
+  }
+}
+
+function optimisticDeviceDetail(action, value) {
+  const details = {
+    turn_on: { key: "power", value: "on" },
+    turn_off: { key: "power", value: "off" },
+    set_brightness: { key: "brightness", value },
+    set_color: { key: "color", value },
+    set_color_temperature: { key: "colorTemperature", value },
+  };
+  return details[action] || null;
 }
 
 async function moveRoom(room, direction) {
+  if (roomEditBusy) return;
   const currentIndex = availableRooms.indexOf(room);
   const nextIndex = currentIndex + direction;
   if (currentIndex < 0 || nextIndex < 0 || nextIndex >= availableRooms.length) return;
   const rooms = [...availableRooms];
   [rooms[currentIndex], rooms[nextIndex]] = [rooms[nextIndex], rooms[currentIndex]];
+  const previousRooms = availableRooms;
+  availableRooms = rooms;
+  setRoomEditBusy(true);
   try {
     const data = await requestJson("/api/rooms/order", {
       method: "PUT",
@@ -1002,11 +1268,46 @@ async function moveRoom(room, direction) {
       body: JSON.stringify({ rooms }),
     });
     availableRooms = data.rooms;
-    await refreshStatus();
+    setRoomEditBusy(false);
     showToast("部屋の並び順を保存しました。");
   } catch (error) {
+    availableRooms = previousRooms;
+    setRoomEditBusy(false);
     showToast(error.message, true);
   }
+}
+
+async function removeRoom(room) {
+  if (roomEditBusy) return;
+  const confirmed = window.confirm(
+    `「${room}」を削除しますか？\n所属するデバイスは「未分類」へ移動し、設定とマイセットは保持されます。`,
+  );
+  if (!confirmed) return;
+  const previousRooms = [...availableRooms];
+  const previousSnapshot = cloneSnapshot(latestStatusSnapshot);
+  availableRooms = availableRooms.filter((item) => item !== room);
+  latestStatusSnapshot?.devices?.forEach((device) => {
+    if (device.room === room) device.room = "未分類";
+  });
+  setRoomEditBusy(true);
+  try {
+    const result = await requestJson(`/api/rooms/${encodeURIComponent(room)}`, { method: "DELETE" });
+    availableRooms = result.rooms;
+    setRoomEditBusy(false);
+    const moved = result.moved_devices;
+    showToast(moved > 0 ? `${room}を削除し、${moved}台を未分類へ移動しました。` : `${room}を削除しました。`);
+  } catch (error) {
+    availableRooms = previousRooms;
+    if (previousSnapshot) latestStatusSnapshot = previousSnapshot;
+    setRoomEditBusy(false);
+    showToast(error.message, true);
+  }
+}
+
+function setRoomEditBusy(busy) {
+  roomEditBusy = busy;
+  addRoomButton.disabled = busy;
+  if (latestStatusSnapshot) renderStatus(latestStatusSnapshot);
 }
 
 function applyTheme(theme) {
@@ -1023,7 +1324,6 @@ async function boot() {
       throw new Error(health.error || "初期化に失敗しました。");
     }
     await loadButtons();
-    await loadRooms();
     await refreshStatus();
     setStatus(true, "準備完了");
   } catch (error) {

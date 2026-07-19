@@ -33,13 +33,15 @@ class DevicePreferenceService:
         config = load_config(self._config_path)
         raw = config.model_dump()
         raw["device_preferences"][device_id] = preference.model_dump()
+        if preference.room not in raw["rooms"]:
+            raw["rooms"].append(preference.room)
         temporary_path = self._config_path.with_suffix(".json.tmp")
         temporary_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary_path.replace(self._config_path)
         return preference
 
     def rooms(self) -> list[str]:
-        return load_config(self._config_path).rooms
+        return self._effective_rooms(load_config(self._config_path))
 
     def add_room(self, room: str) -> list[str]:
         room = room.strip()
@@ -47,6 +49,7 @@ class DevicePreferenceService:
             return self.rooms()
         config = load_config(self._config_path)
         raw = config.model_dump()
+        raw["rooms"] = self._effective_rooms(config)
         if room not in raw["rooms"]:
             raw["rooms"].append(room)
             self._write(raw)
@@ -54,12 +57,34 @@ class DevicePreferenceService:
 
     def reorder_rooms(self, rooms: list[str]) -> list[str]:
         config = load_config(self._config_path)
-        if len(rooms) != len(set(rooms)) or set(rooms) != set(config.rooms):
+        if len(rooms) != len(set(rooms)) or set(rooms) != set(self._effective_rooms(config)):
             raise LauncherError("部屋の並び順が現在の部屋一覧と一致しません。")
         raw = config.model_dump()
         raw["rooms"] = rooms
         self._write(raw)
         return rooms
+
+    def remove_room(self, room: str) -> dict[str, object]:
+        room = room.strip()
+        if room == "未分類":
+            raise LauncherError("「未分類」は削除できません。")
+
+        config = load_config(self._config_path)
+        if room not in self._effective_rooms(config):
+            raise LauncherError("削除する部屋が見つかりません。")
+
+        raw = config.model_dump()
+        moved = 0
+        for preference in raw["device_preferences"].values():
+            if preference["room"] == room:
+                preference["room"] = "未分類"
+                moved += 1
+
+        raw["rooms"] = [item for item in raw["rooms"] if item != room]
+        if "未分類" not in raw["rooms"]:
+            raw["rooms"].append("未分類")
+        self._write(raw)
+        return {"removed": room, "moved_devices": moved, "rooms": raw["rooms"]}
 
     def add_preset(self, device_id: str, update: LightPresetUpdate) -> LightPreset:
         preset = LightPreset.model_validate(update.model_dump())
@@ -108,3 +133,11 @@ class DevicePreferenceService:
         temporary_path = self._config_path.with_suffix(".json.tmp")
         temporary_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary_path.replace(self._config_path)
+
+    @staticmethod
+    def _effective_rooms(config) -> list[str]:
+        rooms = list(config.rooms)
+        for preference in config.device_preferences.values():
+            if preference.room not in rooms:
+                rooms.append(preference.room)
+        return rooms

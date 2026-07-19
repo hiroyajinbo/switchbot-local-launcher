@@ -1,7 +1,10 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from app.actions import ActionResult
 from app.config import LauncherConfig
+from app.device_preferences import DevicePreferenceService
 from app.main import create_app
 from app.status import DeviceStatusSnapshot
 
@@ -75,6 +78,8 @@ def test_get_buttons():
             "type": "device_command",
             "group": "その他",
             "locked": False,
+            "icon": "other",
+            "icon_badge": "none",
         }
     ]
 
@@ -87,6 +92,9 @@ def test_index_disables_browser_cache():
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
+    assert response.text.index('class="scene-panel"') < response.text.index(
+        'class="device-panel primary-panel"'
+    )
 
 
 def test_execute_action():
@@ -108,3 +116,55 @@ def test_get_status():
     assert response.status_code == 200
     assert response.json()["environment"][0]["label"] == "Hub 2"
     assert response.json()["remotes"][0]["label"] == "Air Conditioner"
+
+
+
+
+def test_remove_room_moves_devices_to_uncategorized(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}],
+                "rooms": ["未分類", "寝室"],
+                "device_preferences": {
+                    "light-1": {"room": "寝室", "icon": "light", "locked": True}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    app = create_app(
+        executor=FakeExecutor(),
+        status_service=FakeStatusService(),
+        device_preference_service=DevicePreferenceService(config_path),
+    )
+
+    with TestClient(app) as client:
+        response = client.delete("/api/rooms/寝室")
+
+    assert response.status_code == 200
+    assert response.json()["moved_devices"] == 1
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["device_preferences"]["light-1"]["room"] == "未分類"
+
+
+def test_remove_room_refuses_uncategorized_room(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {"buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}]}
+        ),
+        encoding="utf-8",
+    )
+    app = create_app(
+        executor=FakeExecutor(),
+        status_service=FakeStatusService(),
+        device_preference_service=DevicePreferenceService(config_path),
+    )
+
+    with TestClient(app) as client:
+        response = client.delete("/api/rooms/未分類")
+
+    assert response.status_code == 400
+    assert "削除できません" in response.json()["detail"]

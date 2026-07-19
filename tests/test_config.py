@@ -36,7 +36,35 @@ def test_load_config_reads_device_and_scene_buttons(tmp_path):
     assert isinstance(config.buttons[0], DeviceCommandButton)
     assert config.buttons[0].parameter == "default"
     assert config.buttons[0].group == "その他"
+    assert config.buttons[0].icon == "other"
     assert isinstance(config.buttons[1], SceneButton)
+    assert config.buttons[1].icon == "scene"
+
+
+def test_load_config_reads_quick_action_icon_and_badge(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {
+                        "id": "fan_up",
+                        "label": "扇風機 風量アップ",
+                        "type": "scene",
+                        "scene_id": "scene-1",
+                        "icon": "fan",
+                        "icon_badge": "up",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    button = load_config(config_path).buttons[0]
+
+    assert button.icon == "fan"
+    assert button.icon_badge == "up"
 
 
 def test_load_config_rejects_invalid_json(tmp_path):

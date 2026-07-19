@@ -48,6 +48,15 @@ class ActionExecutor:
                 command_type=button.command_type,
             )
         elif isinstance(button, SceneButton):
+            scenes_response = await self._switchbot_client.get_scenes()
+            scenes = scenes_response.get("body", [])
+            scene_ids = {
+                item.get("sceneId") for item in scenes if isinstance(item, dict)
+            }
+            if button.scene_id not in scene_ids:
+                raise ActionNotFoundError(
+                    f"{button.label} のscene_idは現在のシーン一覧にありません。"
+                )
             await self._switchbot_client.execute_scene(button.scene_id)
 
         return ActionResult(

@@ -14,6 +14,7 @@ from app.config import load_config
 from app.config_sync import (
     ApplyCandidatesRequest,
     ApplyCandidatesResult,
+    ButtonAppearanceUpdate,
     ConfigCandidateList,
     ConfigSyncService,
 )
@@ -39,6 +40,7 @@ def create_app(
     startup_error: LauncherError | None = None,
     config_sync_service: ConfigSyncService | None = None,
     device_control_service: DeviceControlService | None = None,
+    device_preference_service: DevicePreferenceService | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -48,6 +50,7 @@ def create_app(
             app.state.startup_error = startup_error
             app.state.config_sync_service = config_sync_service
             app.state.device_control_service = device_control_service
+            app.state.device_preference_service = device_preference_service
             yield
             return
 
@@ -108,6 +111,8 @@ def create_app(
                     "type": button.type,
                     "group": button.group,
                     "locked": button.locked,
+                    "icon": button.icon,
+                    "icon_badge": button.icon_badge,
                 }
                 for button in current_executor.buttons
             ]
@@ -249,6 +254,28 @@ def create_app(
             raise HTTPException(status_code=500, detail="部屋設定サービスが初期化されていません。")
         try:
             return {"rooms": service.reorder_rooms(update.rooms)}
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/api/buttons/{button_id}/appearance")
+    async def update_button_appearance(
+        button_id: str, update: ButtonAppearanceUpdate
+    ) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.set_button_appearance(button_id, update)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/rooms/{room}")
+    async def remove_room(room: str) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(status_code=500, detail="部屋設定サービスが初期化されていません。")
+        try:
+            return service.remove_room(room)
         except LauncherError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
