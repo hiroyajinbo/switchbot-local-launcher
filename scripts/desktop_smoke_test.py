@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import socket
 import subprocess
 import sys
@@ -36,6 +37,13 @@ def wait_for_health(timeout: float, process: subprocess.Popen) -> None:
     raise RuntimeError(f"ヘルスAPIが{timeout:g}秒以内に応答しませんでした: {last_error}")
 
 
+def verify_desktop_api() -> None:
+    with urlopen(f"http://{HOST}:{PORT}/api/desktop", timeout=5) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    if response.status != 200 or "autostart_enabled" not in body:
+        raise RuntimeError(f"PCアプリ連携APIが正常ではありません: {response.status} {body}")
+
+
 def ensure_port_released(timeout: float) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -52,18 +60,20 @@ def run_smoke_test(
     hold_seconds: float,
     executable: Path | None = None,
     startup_timeout: float = 60.0,
+    working_directory: Path = PROJECT_DIR,
 ) -> None:
     ensure_port_released(1)
     command = [str(executable)] if executable else [sys.executable, "-m", "app.desktop"]
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as output:
         process = subprocess.Popen(
             command,
-            cwd=PROJECT_DIR,
+            cwd=working_directory,
             stdout=output,
             stderr=subprocess.STDOUT,
         )
         try:
             wait_for_health(startup_timeout, process)
+            verify_desktop_api()
             window = Desktop(backend="uia").window(title=WINDOW_TITLE)
             window.wait("visible enabled ready", timeout=30)
             rectangle = window.rectangle()
@@ -73,7 +83,7 @@ def run_smoke_test(
             )
             duplicate = subprocess.run(
                 command,
-                cwd=PROJECT_DIR,
+                cwd=working_directory,
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -123,6 +133,11 @@ def main() -> None:
         help="検出したウィンドウを表示しておく秒数（既定: 15秒）",
     )
     parser.add_argument(
+        "--working-directory",
+        type=Path,
+        help="PCアプリ起動時の作業ディレクトリ（Explorer直接起動相当の検証用）",
+    )
+    parser.add_argument(
         "--startup-timeout",
         type=float,
         default=60.0,
@@ -137,7 +152,15 @@ def main() -> None:
     executable = args.executable.resolve() if args.executable else None
     if executable and not executable.exists():
         parser.error(f"EXEが見つかりません: {executable}")
-    run_smoke_test(args.hold_seconds, executable, args.startup_timeout)
+    working_directory = (
+        args.working_directory.resolve() if args.working_directory else PROJECT_DIR
+    )
+    run_smoke_test(
+        args.hold_seconds,
+        executable,
+        args.startup_timeout,
+        working_directory,
+    )
 
 
 if __name__ == "__main__":

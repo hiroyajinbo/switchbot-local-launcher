@@ -79,7 +79,7 @@ def test_desktop_window_owns_server_lifecycle(tmp_path) -> None:
     )
 
     server = FakeServer.instances[0]
-    assert server.application == "app.main:app"
+    assert server.application.title == "SwitchBot Local Launcher"
     assert server.start_count == 1
     assert server.stop_count == 2
     assert webview.created[0] == "SwitchBot Local Launcher"

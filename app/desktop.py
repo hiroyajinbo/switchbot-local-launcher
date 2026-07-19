@@ -4,6 +4,7 @@ from typing import Any, Protocol
 
 from app.data_paths import load_desktop_settings, prepare_desktop_data
 from app.errors import LauncherError
+from app.main import create_app
 from app.runtime import ManagedServer, configure_rotating_logging
 from app.settings import Settings
 from app.single_instance import SingleInstance, focus_window
@@ -65,7 +66,7 @@ def _run_desktop_window(
 
     log_config = configure_rotating_logging(settings.log_path)
     server = server_factory(
-        "app.main:app",
+        create_app(settings=settings),
         settings.host,
         settings.port,
         log_config=log_config,
