@@ -64,6 +64,27 @@ class FakeStatusService:
         )
 
 
+class FakeDesktopIntegration:
+    def __init__(self):
+        self.enabled = False
+        self.opened = False
+
+    def status(self):
+        return {
+            "available": True,
+            "autostart_enabled": self.enabled,
+            "log_directory": "C:\\Logs",
+        }
+
+    def set_autostart(self, enabled):
+        self.enabled = enabled
+        return enabled
+
+    def open_log_directory(self):
+        self.opened = True
+        return "C:\\Logs"
+
+
 def test_get_buttons():
     app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
 
@@ -82,6 +103,26 @@ def test_get_buttons():
             "icon_badge": "none",
         }
     ]
+
+
+def test_desktop_settings_endpoints():
+    desktop = FakeDesktopIntegration()
+    app = create_app(
+        executor=FakeExecutor(),
+        status_service=FakeStatusService(),
+        desktop_integration=desktop,
+    )
+
+    with TestClient(app) as client:
+        status = client.get("/api/desktop")
+        enabled = client.put("/api/desktop/autostart", json={"enabled": True})
+        logs = client.post("/api/desktop/open-logs")
+
+    assert status.status_code == 200
+    assert status.json()["autostart_enabled"] is False
+    assert enabled.json() == {"autostart_enabled": True}
+    assert logs.json() == {"log_directory": "C:\\Logs"}
+    assert desktop.opened is True
 
 
 def test_index_disables_browser_cache():

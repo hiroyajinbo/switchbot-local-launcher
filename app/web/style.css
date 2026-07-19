@@ -146,6 +146,19 @@ h1 {
   margin-bottom: 20px;
 }
 
+.desktop-settings {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.desktop-settings h3 { margin: 0 0 4px; }
+.desktop-autostart { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.desktop-autostart input { width: 18px; height: 18px; }
+
 .candidate-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -811,4 +824,5 @@ body:not(.edit-mode) .preset-chip > .mini-button:first-child { border-radius: 99
 @media (max-width: 700px) {
   .room-device-grid { grid-template-columns: 1fr; }
   .header-actions { align-items: stretch; flex-direction: column-reverse; }
+  .desktop-settings { grid-template-columns: 1fr; align-items: stretch; }
 }

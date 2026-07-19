@@ -17,6 +17,7 @@ from app.config_sync import (
     ConfigCandidateList,
     ConfigSyncService,
 )
+from app.desktop_integration import DesktopIntegration
 from app.device_control import DeviceControlRequest, DeviceControlResult, DeviceControlService
 from app.device_preferences import (
     DevicePreferenceService,
@@ -41,6 +42,7 @@ def create_app(
     config_sync_service: ConfigSyncService | None = None,
     device_control_service: DeviceControlService | None = None,
     device_preference_service: DevicePreferenceService | None = None,
+    desktop_integration: DesktopIntegration | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -51,6 +53,7 @@ def create_app(
             app.state.config_sync_service = config_sync_service
             app.state.device_control_service = device_control_service
             app.state.device_preference_service = device_preference_service
+            app.state.desktop_integration = desktop_integration
             yield
             return
 
@@ -74,6 +77,7 @@ def create_app(
                 force_error=loaded_settings.force_control_error,
             )
             app.state.device_preference_service = DevicePreferenceService(config_path)
+            app.state.desktop_integration = DesktopIntegration(loaded_settings.log_path)
             app.state.startup_error = None
         except LauncherError as exc:
             app.state.executor = None
@@ -279,6 +283,27 @@ def create_app(
         except LauncherError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/api/desktop")
+    async def desktop_status() -> dict[str, Any]:
+        return _get_desktop_integration(app).status()
+
+    @app.put("/api/desktop/autostart")
+    async def update_desktop_autostart(payload: dict[str, bool]) -> dict[str, Any]:
+        service = _get_desktop_integration(app)
+        try:
+            enabled = service.set_autostart(payload.get("enabled", False))
+            return {"autostart_enabled": enabled}
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/desktop/open-logs")
+    async def open_desktop_logs() -> dict[str, str]:
+        service = _get_desktop_integration(app)
+        try:
+            return {"log_directory": service.open_log_directory()}
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     return app
 
 
@@ -315,6 +340,13 @@ def _get_device_control_service(app: FastAPI) -> DeviceControlService:
     service = getattr(app.state, "device_control_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="デバイス操作サービスが初期化されていません。")
+    return service
+
+
+def _get_desktop_integration(app: FastAPI) -> DesktopIntegration:
+    service = getattr(app.state, "desktop_integration", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="PCアプリ連携が初期化されていません。")
     return service
 
 

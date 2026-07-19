@@ -4,11 +4,14 @@ const addRoomButton = document.querySelector("#addRoomButton");
 const candidateList = document.querySelector("#candidateList");
 const configMessage = document.querySelector("#configMessage");
 const deviceStatusList = document.querySelector("#deviceStatusList");
+const desktopAutostart = document.querySelector("#desktopAutostart");
+const desktopLogPath = document.querySelector("#desktopLogPath");
 const environmentList = document.querySelector("#environmentList");
 const editModeButton = document.querySelector("#editModeButton");
 const historyList = document.querySelector("#historyList");
 const historyCount = document.querySelector("#historyCount");
 const newRoomName = document.querySelector("#newRoomName");
+const openLogsButton = document.querySelector("#openLogsButton");
 const refreshStatusButton = document.querySelector("#refreshStatusButton");
 const refreshCandidatesButton = document.querySelector("#refreshCandidatesButton");
 const remoteList = document.querySelector("#remoteList");
@@ -1317,13 +1320,58 @@ function applyTheme(theme) {
   themeButton.setAttribute("aria-label", dark ? "ライトモードに切り替え" : "ダークモードに切り替え");
 }
 
+async function loadDesktopStatus() {
+  try {
+    const status = await requestJson("/api/desktop");
+    desktopAutostart.checked = status.autostart_enabled;
+    desktopAutostart.disabled = !status.available;
+    openLogsButton.disabled = !status.available;
+    desktopLogPath.textContent = `ログ: ${status.log_directory}`;
+  } catch (error) {
+    desktopAutostart.disabled = true;
+    openLogsButton.disabled = true;
+    desktopLogPath.textContent = error.message;
+  }
+}
+
+async function updateDesktopAutostart() {
+  const enabled = desktopAutostart.checked;
+  desktopAutostart.disabled = true;
+  try {
+    const result = await requestJson("/api/desktop/autostart", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    desktopAutostart.checked = result.autostart_enabled;
+    showToast(result.autostart_enabled ? "自動起動を有効にしました。" : "自動起動を無効にしました。");
+  } catch (error) {
+    desktopAutostart.checked = !enabled;
+    showToast(error.message, true);
+  } finally {
+    desktopAutostart.disabled = false;
+  }
+}
+
+async function openDesktopLogs() {
+  openLogsButton.disabled = true;
+  try {
+    await requestJson("/api/desktop/open-logs", { method: "POST" });
+    showToast("ログフォルダを開きました。");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    openLogsButton.disabled = false;
+  }
+}
+
 async function boot() {
   try {
     const health = await requestJson("/api/health");
     if (!health.ok) {
       throw new Error(health.error || "初期化に失敗しました。");
     }
-    await loadButtons();
+    await Promise.all([loadButtons(), loadDesktopStatus()]);
     await refreshStatus();
     setStatus(true, "準備完了");
   } catch (error) {
@@ -1337,6 +1385,8 @@ refreshCandidatesButton.addEventListener("click", refreshCandidates);
 applyCandidatesButton.addEventListener("click", applyCandidates);
 addRoomButton.addEventListener("click", addRoom);
 removeStaleButton.addEventListener("click", removeStale);
+desktopAutostart.addEventListener("change", updateDesktopAutostart);
+openLogsButton.addEventListener("click", openDesktopLogs);
 editModeButton.addEventListener("click", () => {
   const editing = document.body.classList.toggle("edit-mode");
   editModeButton.textContent = editing ? "完了" : "編集";

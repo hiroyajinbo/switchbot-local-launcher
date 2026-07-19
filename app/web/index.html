@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SwitchBot Local Launcher</title>
-    <link rel="stylesheet" href="/static/style.css?v=mvp2-ui-11" />
+    <link rel="stylesheet" href="/static/style.css?v=mvp3-ui-1" />
   </head>
   <body>
     <main class="shell">
@@ -60,6 +60,17 @@
         <div id="staleList" class="candidate-list stale-list"></div>
         <button id="removeStaleButton" class="danger-button" type="button" disabled>選択した存在しない設定を削除</button>
         <div id="configMessage" class="checked-at"></div>
+        <div class="desktop-settings">
+          <div>
+            <h3>PCアプリ</h3>
+            <div id="desktopLogPath" class="checked-at"></div>
+          </div>
+          <label class="desktop-autostart">
+            <input id="desktopAutostart" type="checkbox" />
+            Windowsログイン時に自動起動
+          </label>
+          <button id="openLogsButton" class="icon-button" type="button">ログフォルダを開く</button>
+        </div>
       </section>
 
       <section class="result legacy-result" aria-live="polite">
@@ -86,6 +97,6 @@
     </main>
     <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=mvp2-ui-11"></script>
+    <script src="/static/app.js?v=mvp3-ui-1"></script>
   </body>
 </html>
