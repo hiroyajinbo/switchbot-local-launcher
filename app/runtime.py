@@ -114,8 +114,10 @@ class ManagedServer:
         self._clear_stopped_server()
 
     def wait(self) -> None:
-        if self._thread is not None:
-            self._thread.join()
+        # An unbounded Thread.join can delay Ctrl+C handling on Windows.
+        # Polling keeps the main thread available for signal delivery.
+        while self._thread is not None and self._thread.is_alive():
+            self._thread.join(0.2)
 
     def _clear_stopped_server(self) -> None:
         self._server = None
