@@ -51,6 +51,17 @@ class FakeServer:
         self.stop_count += 1
 
 
+class FakeInstance:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def acquire(self) -> bool:
+        return True
+
+    def close(self) -> None:
+        self.closed = True
+
+
 def test_desktop_window_owns_server_lifecycle(tmp_path) -> None:
     FakeServer.instances.clear()
     webview = FakeWebview()
@@ -60,7 +71,12 @@ def test_desktop_window_owns_server_lifecycle(tmp_path) -> None:
         log_path=str(tmp_path / "launcher.log"),
     )
 
-    run_desktop(settings=settings, webview_module=webview, server_factory=FakeServer)
+    run_desktop(
+        settings=settings,
+        webview_module=webview,
+        server_factory=FakeServer,
+        instance_factory=FakeInstance,
+    )
 
     server = FakeServer.instances[0]
     assert server.application == "app.main:app"

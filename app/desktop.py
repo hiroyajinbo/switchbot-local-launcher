@@ -5,6 +5,9 @@ from typing import Any, Protocol
 from app.errors import LauncherError
 from app.runtime import ManagedServer, configure_rotating_logging
 from app.settings import Settings, load_settings
+from app.single_instance import SingleInstance
+
+WINDOW_TITLE = "SwitchBot Local Launcher"
 
 
 class WebviewProtocol(Protocol):
@@ -18,6 +21,28 @@ def run_desktop(
     settings: Settings | None = None,
     webview_module: WebviewProtocol | None = None,
     server_factory: type[ManagedServer] = ManagedServer,
+    instance_factory: type[SingleInstance] = SingleInstance,
+) -> None:
+    instance = instance_factory()
+    if not instance.acquire():
+        focus_existing_window()
+        return
+
+    try:
+        _run_desktop_window(
+            settings=settings,
+            webview_module=webview_module,
+            server_factory=server_factory,
+        )
+    finally:
+        instance.close()
+
+
+def _run_desktop_window(
+    *,
+    settings: Settings | None,
+    webview_module: WebviewProtocol | None,
+    server_factory: type[ManagedServer],
 ) -> None:
     if settings is None:
         try:
@@ -46,7 +71,7 @@ def run_desktop(
     try:
         url = server.start()
         window = webview_module.create_window(
-            "SwitchBot Local Launcher",
+            WINDOW_TITLE,
             url,
             width=1120,
             height=800,
@@ -59,6 +84,18 @@ def run_desktop(
         raise SystemExit(1) from None
     finally:
         server.stop()
+
+
+def focus_existing_window() -> None:
+    try:
+        from pywinauto import Desktop
+
+        window = Desktop(backend="uia").window(title=WINDOW_TITLE)
+        window.wait("visible", timeout=5)
+        window.restore()
+        window.set_focus()
+    except Exception as exc:  # GUI backends expose several platform-specific exceptions.
+        print(f"INFO: PCアプリは既に起動しています。既存ウィンドウを確認してください: {exc}")
 
 
 def run() -> None:

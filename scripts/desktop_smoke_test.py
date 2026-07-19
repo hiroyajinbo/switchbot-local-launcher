@@ -62,6 +62,22 @@ def run_smoke_test(hold_seconds: float) -> None:
                 f"OK: ウィンドウを検出しました "
                 f"({rectangle.width()}x{rectangle.height()}, PID={process.pid})"
             )
+            duplicate = subprocess.run(
+                [sys.executable, "-m", "app.desktop"],
+                cwd=PROJECT_DIR,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if duplicate.returncode != 0:
+                raise RuntimeError(
+                    f"二重起動プロセスが終了コード{duplicate.returncode}で終了しました。\n"
+                    f"{duplicate.stdout}{duplicate.stderr}"
+                )
+            if process.poll() is not None:
+                raise RuntimeError("二重起動の確認中に既存アプリが終了しました。")
+            print("OK: 二重起動を防止し、既存アプリだけが動作しています。")
             time.sleep(hold_seconds)
             window.close()
             process.wait(timeout=20)
