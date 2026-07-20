@@ -150,7 +150,8 @@ function renderButtons(buttons) {
       const lock = document.createElement("button");
       lock.type = "button";
       lock.className = `scene-lock${button.locked ? " locked" : ""}`;
-      lock.title = button.locked ? "シーンのロックを解除" : "シーンをロック";
+      const targetName = button.type === "remote_command" ? "クイック操作" : "シーン";
+      lock.title = button.locked ? `${targetName}のロックを解除` : `${targetName}をロック`;
       lock.innerHTML = svgIcon(button.locked ? "locked" : "unlocked");
       lock.addEventListener("click", () => setSceneLock(button.id, !button.locked));
       wrapper.append(element, lock, buttonAppearanceEditor(button));
@@ -709,8 +710,8 @@ function svgIcon(icon) {
     sensor: '<path d="M4 12a8 8 0 0 1 8-8m-8 8a8 8 0 0 0 8 8m-4-8a4 4 0 0 1 4-4m-4 4a4 4 0 0 0 4 4"/>',
     lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     hub: '<rect x="4" y="6" width="16" height="12" rx="3"/><path d="M8 13h8M12 9v8"/>',
-    climate: '<path d="M7 5h10M5 9h14M7 13h10M9 17h6"/><path d="M4 3v16h16V3"/>',
-    fan: '<circle cx="12" cy="12" r="2"/><path d="M12 10c-1-5 2-7 5-5 2 2 0 6-3 7M10 12c-5 1-7-2-5-5 2-2 6 0 7 3M12 14c1 5-2 7-5 5-2-2 0-6 3-7"/>',
+    climate: '<rect x="3" y="4" width="18" height="9" rx="3"/><path d="M6 9h12M7 13c0 3-2 3-2 6m7-6v6m5-6c0 3 2 3 2 6"/>',
+    fan: '<circle cx="12" cy="12" r="2.2"/><circle cx="12" cy="12" r="9"/><path d="M12 9.8c-.8-3.8.4-6.1 2.8-5.7 2.7.5 2.8 3.8.8 5.9-1 1-2.2 1.4-3.6 2M14 13.1c3.7 1.2 5.1 3.4 3.5 5.2-1.9 2-4.7.4-5.5-2.4-.4-1.3-.2-2.6 0-3.9M10.1 13.1c-2.9 2.6-5.5 2.7-6.3.4-.8-2.6 2-4.2 4.8-3.4 1.3.4 2.3 1.2 3.4 1.9"/>',
     monitor: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
     game: '<path d="M8 8h8a6 6 0 0 1 5 7l-1 3a2 2 0 0 1-3 1l-3-2h-4l-3 2a2 2 0 0 1-3-1l-1-3a6 6 0 0 1 5-7Z"/><path d="M7 12v4m-2-2h4m7-1h.01m2 2h.01"/>',
     computer: '<rect x="4" y="3" width="16" height="13" rx="2"/><path d="M8 21h8M12 16v5"/>',

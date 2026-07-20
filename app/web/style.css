@@ -767,8 +767,8 @@ body:not(.edit-mode) .device-icon-button { pointer-events: none; border-color: t
 .scene-action .action-button { width: 100%; padding-right: 48px; }
 .scene-action.locked .action-button { background: var(--muted); border-color: var(--muted); }
 .scene-lock {
-  position: absolute; top: 50%; right: 8px; display: grid; place-items: center;
-  width: 34px; height: 34px; transform: translateY(-50%); border: 0; border-radius: 8px;
+  position: absolute; top: 8px; right: 8px; display: grid; place-items: center;
+  width: 34px; height: 34px; border: 0; border-radius: 8px;
   background: rgb(255 255 255 / 88%); color: var(--accent-strong); cursor: pointer;
 }
 .scene-lock.locked { color: var(--danger); }
