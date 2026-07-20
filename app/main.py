@@ -304,6 +304,16 @@ def create_app(
         except LauncherError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    @app.delete("/api/remotes/quick-actions/{button_id}")
+    async def remove_remote_quick_action(button_id: str) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.remove_remote_quick_action(button_id)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.delete("/api/rooms/{room}")
     async def remove_room(room: str) -> dict[str, Any]:
         service = getattr(app.state, "device_preference_service", None)

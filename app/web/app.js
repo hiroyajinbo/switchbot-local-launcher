@@ -154,6 +154,9 @@ function renderButtons(buttons) {
       lock.innerHTML = svgIcon(button.locked ? "locked" : "unlocked");
       lock.addEventListener("click", () => setSceneLock(button.id, !button.locked));
       wrapper.append(element, lock, buttonAppearanceEditor(button));
+      if (button.type === "remote_command") {
+        wrapper.append(remoteQuickDeleteButton(button));
+      }
       toolbar.append(wrapper);
     });
     section.append(heading, toolbar);
@@ -415,6 +418,28 @@ function deviceControls(item) {
     controls.querySelectorAll("button, input").forEach((element) => { element.disabled = true; });
   }
   return controls;
+}
+
+function remoteQuickDeleteButton(button) {
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "remote-quick-delete edit-only";
+  remove.textContent = "削除";
+  remove.addEventListener("click", async () => {
+    if (!window.confirm(`「${button.label}」をクイック操作から削除しますか？`)) return;
+    remove.disabled = true;
+    try {
+      const result = await requestJson(`/api/remotes/quick-actions/${button.id}`, {
+        method: "DELETE",
+      });
+      await loadButtons();
+      showToast(`「${result.label}」を削除しました。`);
+    } catch (error) {
+      remove.disabled = false;
+      showToast(error.message, true);
+    }
+  });
+  return remove;
 }
 
 function controlField(label, ...elements) {

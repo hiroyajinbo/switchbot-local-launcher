@@ -210,6 +210,18 @@ class ConfigSyncService:
         self._write(raw)
         return {"id": button_id, "updated": existing is not None}
 
+    def remove_remote_quick_action(self, button_id: str) -> dict[str, Any]:
+        config = load_config(self._config_path)
+        button = config.get_button(button_id)
+        if button is None:
+            raise ConfigError(f"未定義のボタンIDです: {button_id}")
+        if not isinstance(button, RemoteCommandButton):
+            raise ConfigError("手動追加したリモコン操作だけを削除できます。")
+        raw = config.model_dump()
+        raw["buttons"] = [item for item in raw["buttons"] if item["id"] != button_id]
+        self._write(raw)
+        return {"removed": True, "id": button_id, "label": button.label}
+
     def _write(self, raw: dict[str, Any]) -> None:
         validated = LauncherConfig.model_validate(raw)
         temporary_path = self._config_path.with_suffix(".json.tmp")

@@ -182,3 +182,32 @@ def test_remote_power_off_does_not_depend_on_air_conditioner_settings(tmp_path):
     saved = load_config(config_path).get_button(result["id"])
     assert saved.command == "turnOff"
     assert saved.parameter == "default"
+
+
+def test_removes_only_manual_remote_quick_actions(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"},
+                    {
+                        "id": "remote_off",
+                        "label": "AC OFF",
+                        "type": "remote_command",
+                        "device_id": "remote-1",
+                        "command": "turnOff",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, FakeClient())
+
+    result = service.remove_remote_quick_action("remote_off")
+
+    assert result["removed"] is True
+    assert [button.id for button in load_config(config_path).buttons] == ["scene"]
+    with pytest.raises(ConfigError, match="リモコン操作だけ"):
+        service.remove_remote_quick_action("scene")

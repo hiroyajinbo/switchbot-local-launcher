@@ -609,6 +609,7 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
 
 .remote-control-field {
   display: grid;
+  min-width: 0;
   gap: 4px;
   color: var(--muted);
   font-size: 12px;
@@ -616,6 +617,8 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
 }
 
 .remote-control-field select {
+  box-sizing: border-box;
+  width: 100%;
   min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -625,6 +628,8 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
 }
 
 .remote-control-field input {
+  box-sizing: border-box;
+  width: 100%;
   min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -642,7 +647,9 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
 .remote-quick-editor {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr auto;
+  box-sizing: border-box;
+  width: 100%;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 72px;
   gap: 10px;
   align-items: end;
   padding: 12px;
@@ -652,9 +659,19 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
 }
 .remote-quick-editor[hidden] { display: none; }
 .remote-quick-editor > .mini-button {
+  box-sizing: border-box;
+  width: 72px;
   min-width: 72px;
   min-height: 36px;
   white-space: nowrap;
+}
+.remote-quick-delete {
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 5px 9px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
 }
 
 .empty-text {
