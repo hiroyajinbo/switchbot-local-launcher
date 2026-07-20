@@ -600,6 +600,35 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
   color: var(--muted);
 }
 
+.air-conditioner-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.remote-control-field {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.remote-control-field select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 9px;
+  background: var(--control-bg);
+  color: var(--text);
+}
+
+.remote-send-button,
+.air-conditioner-controls .device-feedback {
+  grid-column: 1 / -1;
+}
+
 .empty-text {
   color: var(--muted);
 }
@@ -617,6 +646,10 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
 
   .device-row {
     grid-template-columns: 1fr;
+  }
+
+  .air-conditioner-controls {
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
   }
 
   .history-item {

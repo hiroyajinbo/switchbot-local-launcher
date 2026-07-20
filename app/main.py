@@ -26,6 +26,11 @@ from app.device_preferences import (
     RoomOrderUpdate,
 )
 from app.errors import ActionNotFoundError, LauncherError
+from app.remote_control import (
+    AirConditionerControlRequest,
+    RemoteControlResult,
+    RemoteControlService,
+)
 from app.runtime import ManagedServer, configure_rotating_logging
 from app.settings import Settings, load_settings
 from app.status import DeviceStatusService, DeviceStatusSnapshot
@@ -43,6 +48,7 @@ def create_app(
     device_control_service: DeviceControlService | None = None,
     device_preference_service: DevicePreferenceService | None = None,
     desktop_integration: DesktopIntegration | None = None,
+    remote_control_service: RemoteControlService | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -54,6 +60,7 @@ def create_app(
             app.state.device_control_service = device_control_service
             app.state.device_preference_service = device_preference_service
             app.state.desktop_integration = desktop_integration
+            app.state.remote_control_service = remote_control_service
             yield
             return
 
@@ -75,6 +82,9 @@ def create_app(
                 switchbot_client,
                 config_path,
                 force_error=loaded_settings.force_control_error,
+            )
+            app.state.remote_control_service = RemoteControlService(
+                switchbot_client, force_error=loaded_settings.force_control_error
             )
             app.state.device_preference_service = DevicePreferenceService(config_path)
             app.state.desktop_integration = DesktopIntegration(loaded_settings.log_path)
@@ -261,6 +271,16 @@ def create_app(
         except LauncherError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.post("/api/remotes/{device_id}/air-conditioner")
+    async def control_air_conditioner(
+        device_id: str, request: AirConditionerControlRequest
+    ) -> RemoteControlResult:
+        service = _get_remote_control_service(app)
+        try:
+            return await service.control_air_conditioner(device_id, request)
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.put("/api/buttons/{button_id}/appearance")
     async def update_button_appearance(
         button_id: str, update: ButtonAppearanceUpdate
@@ -347,6 +367,13 @@ def _get_desktop_integration(app: FastAPI) -> DesktopIntegration:
     service = getattr(app.state, "desktop_integration", None)
     if service is None:
         raise HTTPException(status_code=500, detail="PCアプリ連携が初期化されていません。")
+    return service
+
+
+def _get_remote_control_service(app: FastAPI) -> RemoteControlService:
+    service = getattr(app.state, "remote_control_service", None)
+    if service is None:
+        raise HTTPException(status_code=500, detail="リモコン操作サービスが初期化されていません。")
     return service
 
 

@@ -149,12 +149,18 @@ def _default_icon(device_type: str) -> str:
 
 def _format_remote(remote: dict[str, Any]) -> dict[str, Any]:
     remote_type = remote.get("remoteType") or "Infrared Remote"
+    is_air_conditioner = remote_type in {"Air Conditioner", "DIY Air Conditioner"}
     return {
         "device_id": remote.get("deviceId"),
         "label": remote.get("deviceName") or remote.get("deviceId"),
         "type": remote_type,
         "hub_device_id": remote.get("hubDeviceId"),
-        "summary": "状態取得対象外。操作する場合はSwitchBotアプリでシーン化してください。",
+        "summary": (
+            "実状態は取得できません。送信した設定で操作します。"
+            if is_air_conditioner
+            else "状態取得対象外。操作する場合はSwitchBotアプリでシーン化してください。"
+        ),
+        "controls": {"air_conditioner": is_air_conditioner},
     }
 
 

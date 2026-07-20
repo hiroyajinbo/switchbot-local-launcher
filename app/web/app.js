@@ -1021,10 +1021,102 @@ function renderRemotes(items) {
 
   items.forEach((item) => {
     const element = document.createElement("div");
-    element.className = "device-row muted-row";
-    element.append(deviceMain(item.label, item.type, item.summary), remoteDetails(item));
+    element.className = "device-row remote-row";
+    element.dataset.remoteId = item.device_id;
+    const details = item.controls?.air_conditioner
+      ? airConditionerControls(item)
+      : remoteDetails(item);
+    element.append(deviceMain(item.label, item.type, item.summary), details);
     remoteList.append(element);
   });
+}
+
+function airConditionerControls(item) {
+  const wrapper = document.createElement("form");
+  wrapper.className = "air-conditioner-controls";
+
+  const temperature = remoteSelect("温度", Array.from({ length: 15 }, (_, i) => {
+    const value = String(i + 16);
+    return [value, `${value}℃`];
+  }), "24");
+  const mode = remoteSelect("モード", [
+    ["auto", "自動"], ["cool", "冷房"], ["dry", "除湿"],
+    ["fan", "送風"], ["heat", "暖房"],
+  ], "cool");
+  const fanSpeed = remoteSelect("風量", [
+    ["auto", "自動"], ["low", "弱"], ["medium", "中"], ["high", "強"],
+  ], "auto");
+  const power = remoteSelect("電源", [["on", "ON"], ["off", "OFF"]], "on");
+
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.className = "mini-button remote-send-button";
+  submit.textContent = "この設定を送信";
+
+  const feedback = document.createElement("div");
+  feedback.className = "device-feedback";
+  feedback.hidden = true;
+
+  wrapper.append(temperature.field, mode.field, fanSpeed.field, power.field, submit, feedback);
+  wrapper.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    wrapper.closest(".remote-row")?.classList.add("busy");
+    submit.disabled = true;
+    feedback.hidden = false;
+    feedback.className = "device-feedback pending";
+    feedback.textContent = "赤外線コマンドを送信中...";
+    setResult(`${item.label} 送信中...`);
+    try {
+      const result = await requestJson(`/api/remotes/${item.device_id}/air-conditioner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          temperature: Number(temperature.select.value),
+          mode: mode.select.value,
+          fan_speed: fanSpeed.select.value,
+          power: power.select.value,
+        }),
+      });
+      const time = new Date().toLocaleString("ja-JP");
+      feedback.className = "device-feedback success";
+      feedback.textContent = `最後に送信: ${remoteSettingLabel(result.last_sent)}`;
+      setResult(result.message, time);
+      addHistory(item.label, result.message, time);
+    } catch (error) {
+      const time = new Date().toLocaleString("ja-JP");
+      feedback.className = "device-feedback error";
+      feedback.textContent = error.message;
+      setResult(error.message, time, true);
+      addHistory(item.label, error.message, time, true);
+    } finally {
+      wrapper.closest(".remote-row")?.classList.remove("busy");
+      submit.disabled = false;
+    }
+  });
+  return wrapper;
+}
+
+function remoteSelect(label, options, selected) {
+  const field = document.createElement("label");
+  field.className = "remote-control-field";
+  const caption = document.createElement("span");
+  caption.textContent = label;
+  const select = document.createElement("select");
+  options.forEach(([value, text]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    option.selected = value === selected;
+    select.append(option);
+  });
+  field.append(caption, select);
+  return { field, select };
+}
+
+function remoteSettingLabel(setting) {
+  const modes = { auto: "自動", cool: "冷房", dry: "除湿", fan: "送風", heat: "暖房" };
+  const fans = { auto: "風量自動", low: "風量弱", medium: "風量中", high: "風量強" };
+  return `${setting.power === "on" ? "ON" : "OFF"} / ${setting.temperature}℃ / ${modes[setting.mode]} / ${fans[setting.fan_speed]}`;
 }
 
 function remoteDetails(item) {

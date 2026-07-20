@@ -65,7 +65,8 @@ async def test_status_snapshot_splits_environment_and_devices():
         "color_temperature": True,
     }
     assert snapshot.remotes[0]["label"] == "Air Conditioner"
-    assert snapshot.remotes[0]["summary"].startswith("状態取得対象外")
+    assert snapshot.remotes[0]["summary"].startswith("実状態は取得できません")
+    assert snapshot.remotes[0]["controls"] == {"air_conditioner": True}
 
 
 @pytest.mark.asyncio

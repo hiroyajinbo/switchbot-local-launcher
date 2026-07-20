@@ -164,6 +164,11 @@ ON/OFF操作できそうなSwitchBot純正デバイスのボタン雛形を作�
 調査観点は [docs/switchbot-api-capability-notes.md](docs/switchbot-api-capability-notes.md) に記録します。
 赤外線リモコンは一覧には出ますが、状態取得対象外として画面に表示します。
 
+`Air Conditioner` と `DIY Air Conditioner` は、赤外線リモコン欄から温度・
+モード・風量・電源をまとめて送信できます。APIでは実状態を取得できないため、
+成功後の表示は「最後に送信した設定」です。詳細は
+[`docs/infrared-remote-api.md`](docs/infrared-remote-api.md) を参照してください。
+
 ## 設定の検証
 
 `config.json` の `scene_id` と `device_id` が、直近にエクスポートしたSwitchBot一覧に存在するか確認できます。

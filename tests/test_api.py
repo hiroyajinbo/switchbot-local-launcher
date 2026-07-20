@@ -85,6 +85,15 @@ class FakeDesktopIntegration:
         return "C:\\Logs"
 
 
+class FakeRemoteControlService:
+    async def control_air_conditioner(self, device_id, request):
+        return {
+            "success": True,
+            "message": f"{device_id} {request.temperature}℃ 送信成功",
+            "last_sent": request.model_dump(),
+        }
+
+
 def test_get_buttons():
     app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
 
@@ -157,6 +166,28 @@ def test_get_status():
     assert response.status_code == 200
     assert response.json()["environment"][0]["label"] == "Hub 2"
     assert response.json()["remotes"][0]["label"] == "Air Conditioner"
+
+
+def test_control_air_conditioner():
+    app = create_app(
+        executor=FakeExecutor(),
+        status_service=FakeStatusService(),
+        remote_control_service=FakeRemoteControlService(),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/remotes/remote-1/air-conditioner",
+            json={
+                "temperature": 25,
+                "mode": "cool",
+                "fan_speed": "auto",
+                "power": "on",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["last_sent"]["mode"] == "cool"
 
 
 
