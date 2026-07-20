@@ -1,10 +1,19 @@
+import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.config import DeviceCommandButton, LauncherConfig, SceneButton, load_config
+from app.config import (
+    DeviceCommandButton,
+    LauncherConfig,
+    QuickIcon,
+    QuickIconBadge,
+    RemoteCommandButton,
+    SceneButton,
+    load_config,
+)
 from app.config_device_commands import build_device_command_config
 from app.config_from_resources import build_config_from_resources
 from app.errors import ConfigError
@@ -38,6 +47,16 @@ class ButtonAppearanceUpdate(BaseModel):
     icon_badge: str
 
 
+class RemoteQuickActionUpdate(BaseModel):
+    label: Annotated[str, Field(min_length=1)]
+    group: Annotated[str, Field(min_length=1)] = "リモコン"
+    device_id: Annotated[str, Field(min_length=1)]
+    parameter: Annotated[str, Field(pattern=r"^\d+,[1-5],[1-4],(?:on|off)$")]
+    icon: QuickIcon = "climate"
+    icon_badge: QuickIconBadge = "none"
+    overwrite: bool = False
+
+
 class ConfigSyncService:
     def __init__(self, config_path: Path, client: SwitchBotClient) -> None:
         self._config_path = config_path
@@ -66,12 +85,19 @@ class ConfigSyncService:
             for item in devices_body.get("deviceList", [])
             if isinstance(item, dict)
         }
+        remote_ids = {
+            item.get("deviceId")
+            for item in devices_body.get("infraredRemoteList", [])
+            if isinstance(item, dict)
+        }
         stale = []
         for button in config.buttons:
             missing = (
                 isinstance(button, SceneButton) and button.scene_id not in scene_ids
             ) or (
                 isinstance(button, DeviceCommandButton) and button.device_id not in device_ids
+            ) or (
+                isinstance(button, RemoteCommandButton) and button.device_id not in remote_ids
             )
             if missing:
                 stale.append(ConfigCandidate.model_validate(button.model_dump()))
@@ -146,6 +172,31 @@ class ConfigSyncService:
         removed = len(config.buttons) - len(raw["buttons"])
         self._write(raw)
         return {"removed": removed}
+
+    def save_remote_quick_action(self, update: RemoteQuickActionUpdate) -> dict[str, Any]:
+        signature = f"{update.device_id}\0setAll\0{update.parameter}"
+        button_id = f"remote_{hashlib.sha256(signature.encode()).hexdigest()[:12]}"
+        config = load_config(self._config_path)
+        existing = config.get_button(button_id)
+        if existing is not None and not update.overwrite:
+            raise ConfigError("同じリモコン設定が登録済みです。上書きする場合は確認してください。")
+
+        item = RemoteCommandButton(
+            id=button_id,
+            label=update.label.strip(),
+            group=update.group.strip(),
+            type="remote_command",
+            device_id=update.device_id,
+            command="setAll",
+            parameter=update.parameter,
+            icon=update.icon,
+            icon_badge=update.icon_badge,
+        )
+        raw = config.model_dump()
+        raw["buttons"] = [button for button in raw["buttons"] if button["id"] != button_id]
+        raw["buttons"].append(item.model_dump())
+        self._write(raw)
+        return {"id": button_id, "updated": existing is not None}
 
     def _write(self, raw: dict[str, Any]) -> None:
         validated = LauncherConfig.model_validate(raw)

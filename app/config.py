@@ -32,6 +32,22 @@ class DeviceCommandButton(BaseModel):
     icon_badge: QuickIconBadge = "none"
 
 
+class RemoteCommandButton(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: Annotated[str, Field(min_length=1, pattern=r"^[A-Za-z0-9_-]+$")]
+    label: Annotated[str, Field(min_length=1)]
+    group: Annotated[str, Field(min_length=1)] = "リモコン"
+    type: Literal["remote_command"]
+    device_id: Annotated[str, Field(min_length=1)]
+    command: Annotated[str, Field(min_length=1)]
+    parameter: str = "default"
+    command_type: str = "command"
+    locked: bool = False
+    icon: QuickIcon = "climate"
+    icon_badge: QuickIconBadge = "none"
+
+
 class SceneButton(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -45,7 +61,9 @@ class SceneButton(BaseModel):
     icon_badge: QuickIconBadge = "none"
 
 
-Button = Annotated[DeviceCommandButton | SceneButton, Field(discriminator="type")]
+Button = Annotated[
+    DeviceCommandButton | RemoteCommandButton | SceneButton, Field(discriminator="type")
+]
 
 
 class DevicePreference(BaseModel):

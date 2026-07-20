@@ -624,10 +624,33 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
   color: var(--text);
 }
 
+.remote-control-field input {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 9px;
+  background: var(--control-bg);
+  color: var(--text);
+}
+
 .remote-send-button,
 .air-conditioner-controls .device-feedback {
   grid-column: 1 / -1;
 }
+
+.remote-quick-button { grid-column: 1 / -1; }
+.remote-quick-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--control-bg);
+}
+.remote-quick-editor[hidden] { display: none; }
 
 .empty-text {
   color: var(--muted);
@@ -651,6 +674,7 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
   .air-conditioner-controls {
     grid-template-columns: repeat(2, minmax(100px, 1fr));
   }
+  .remote-quick-editor { grid-template-columns: 1fr; }
 
   .history-item {
     flex-direction: column;

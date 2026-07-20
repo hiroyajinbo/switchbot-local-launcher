@@ -3,7 +3,11 @@ import json
 import pytest
 
 from app.config import load_config
-from app.config_sync import ButtonAppearanceUpdate, ConfigSyncService
+from app.config_sync import (
+    ButtonAppearanceUpdate,
+    ConfigSyncService,
+    RemoteQuickActionUpdate,
+)
 from app.errors import ConfigError
 
 
@@ -122,3 +126,34 @@ def test_updates_button_appearance(tmp_path):
     button = load_config(config_path).buttons[0]
     assert button.icon == "fan"
     assert button.icon_badge == "up"
+
+
+def test_saves_and_overwrites_remote_quick_action(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {"buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}]}
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, FakeClient())
+    update = RemoteQuickActionUpdate(
+        label="寝る前の冷房",
+        group="空調",
+        device_id="remote-1",
+        parameter="25,2,1,on",
+    )
+
+    added = service.save_remote_quick_action(update)
+    with pytest.raises(ConfigError, match="登録済み"):
+        service.save_remote_quick_action(update)
+    updated = service.save_remote_quick_action(
+        update.model_copy(update={"label": "冷房25℃", "overwrite": True})
+    )
+
+    assert added["updated"] is False
+    assert updated == {"id": added["id"], "updated": True}
+    saved = load_config(config_path).get_button(added["id"])
+    assert saved.type == "remote_command"
+    assert saved.label == "冷房25℃"
+    assert saved.parameter == "25,2,1,on"

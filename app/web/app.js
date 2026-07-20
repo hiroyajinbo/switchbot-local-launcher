@@ -119,7 +119,7 @@ async function executeAction(button) {
 function renderButtons(buttons) {
   currentButtons = buttons;
   buttonList.replaceChildren();
-  buttons = buttons.filter((button) => button.type === "scene");
+  buttons = buttons.filter((button) => ["scene", "remote_command"].includes(button.type));
   const groups = new Map();
   buttons.forEach((button) => {
     const groupName = button.group || "その他";
@@ -138,7 +138,10 @@ function renderButtons(buttons) {
       const element = document.createElement("button");
       element.className = "action-button";
       element.type = "button";
-      const icon = quickActionIcon(button.icon || "scene", button.icon_badge || "none");
+      const icon = quickActionIcon(
+        button.icon || (button.type === "remote_command" ? "climate" : "scene"),
+        button.icon_badge || "none",
+      );
       const label = document.createElement("span");
       label.textContent = button.label;
       element.append(icon, label);
@@ -1053,11 +1056,26 @@ function airConditionerControls(item) {
   submit.className = "mini-button remote-send-button";
   submit.textContent = "この設定を送信";
 
+  const quickButton = document.createElement("button");
+  quickButton.type = "button";
+  quickButton.className = "mini-button remote-quick-button";
+  quickButton.textContent = "＋ クイック操作";
+
+  const quickEditor = airConditionerQuickEditor(item, {
+    temperature, mode, fanSpeed, power,
+  });
+  quickButton.addEventListener("click", () => {
+    quickEditor.hidden = !quickEditor.hidden;
+  });
+
   const feedback = document.createElement("div");
   feedback.className = "device-feedback";
   feedback.hidden = true;
 
-  wrapper.append(temperature.field, mode.field, fanSpeed.field, power.field, submit, feedback);
+  wrapper.append(
+    temperature.field, mode.field, fanSpeed.field, power.field,
+    submit, quickButton, quickEditor, feedback,
+  );
   wrapper.addEventListener("submit", async (event) => {
     event.preventDefault();
     wrapper.closest(".remote-row")?.classList.add("busy");
@@ -1094,6 +1112,92 @@ function airConditionerControls(item) {
     }
   });
   return wrapper;
+}
+
+function airConditionerQuickEditor(item, controls) {
+  const editor = document.createElement("div");
+  editor.className = "remote-quick-editor";
+  editor.hidden = true;
+
+  const name = labeledTextInput("表示名", `${item.label} 24℃ 冷房`);
+  const group = labeledTextInput("グループ", "空調");
+  const icon = remoteSelect("アイコン", Object.entries(quickIconOptions), "climate");
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "mini-button";
+  save.textContent = "追加";
+  save.addEventListener("click", async () => {
+    const label = name.input.value.trim();
+    const groupName = group.input.value.trim();
+    if (!label || !groupName) {
+      showToast("表示名とグループを入力してください。", true);
+      return;
+    }
+    const payload = {
+      label,
+      group: groupName,
+      device_id: item.device_id,
+      parameter: airConditionerParameter(controls),
+      icon: icon.select.value,
+      icon_badge: "none",
+      overwrite: false,
+    };
+    save.disabled = true;
+    try {
+      await saveRemoteQuickAction(payload);
+      editor.hidden = true;
+    } catch (error) {
+      if (error.message.includes("同じリモコン設定が登録済み") &&
+          window.confirm("同じ設定が登録済みです。表示名などを上書きしますか？")) {
+        payload.overwrite = true;
+        try {
+          await saveRemoteQuickAction(payload);
+          editor.hidden = true;
+        } catch (overwriteError) {
+          showToast(overwriteError.message, true);
+        }
+      } else if (!error.message.includes("同じリモコン設定が登録済み")) {
+        showToast(error.message, true);
+      }
+    } finally {
+      save.disabled = false;
+    }
+  });
+  editor.append(name.field, group.field, icon.field, save);
+  return editor;
+}
+
+function labeledTextInput(label, value) {
+  const field = document.createElement("label");
+  field.className = "remote-control-field";
+  const caption = document.createElement("span");
+  caption.textContent = label;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = value;
+  field.append(caption, input);
+  return { field, input };
+}
+
+function airConditionerParameter({ temperature, mode, fanSpeed, power }) {
+  const modeCodes = { auto: 1, cool: 2, dry: 3, fan: 4, heat: 5 };
+  const fanCodes = { auto: 1, low: 2, medium: 3, high: 4 };
+  return [
+    temperature.select.value,
+    modeCodes[mode.select.value],
+    fanCodes[fanSpeed.select.value],
+    power.select.value,
+  ].join(",");
+}
+
+async function saveRemoteQuickAction(payload) {
+  const result = await requestJson("/api/remotes/quick-actions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  await loadButtons();
+  showToast(result.updated ? "クイック操作を更新しました。" : "クイック操作へ追加しました。");
 }
 
 function remoteSelect(label, options, selected) {

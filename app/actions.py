@@ -1,7 +1,13 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.config import Button, DeviceCommandButton, LauncherConfig, SceneButton
+from app.config import (
+    Button,
+    DeviceCommandButton,
+    LauncherConfig,
+    RemoteCommandButton,
+    SceneButton,
+)
 from app.errors import ActionNotFoundError, LauncherError
 from app.switchbot_client import SwitchBotClient
 
@@ -40,7 +46,7 @@ class ActionExecutor:
         if button.locked:
             raise LauncherError(f"{button.label} は操作ロックされています。")
 
-        if isinstance(button, DeviceCommandButton):
+        if isinstance(button, DeviceCommandButton | RemoteCommandButton):
             await self._switchbot_client.command_device(
                 device_id=button.device_id,
                 command=button.command,

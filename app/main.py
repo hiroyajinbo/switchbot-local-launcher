@@ -16,6 +16,7 @@ from app.config_sync import (
     ButtonAppearanceUpdate,
     ConfigCandidateList,
     ConfigSyncService,
+    RemoteQuickActionUpdate,
 )
 from app.desktop_integration import DesktopIntegration
 from app.device_control import DeviceControlRequest, DeviceControlResult, DeviceControlService
@@ -292,6 +293,16 @@ def create_app(
             return result
         except LauncherError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/remotes/quick-actions")
+    async def save_remote_quick_action(update: RemoteQuickActionUpdate) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.save_remote_quick_action(update)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.delete("/api/rooms/{room}")
     async def remove_room(room: str) -> dict[str, Any]:

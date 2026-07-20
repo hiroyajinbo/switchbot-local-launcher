@@ -48,6 +48,29 @@ async def test_execute_device_command():
 
 
 @pytest.mark.asyncio
+async def test_execute_remote_quick_action():
+    config = LauncherConfig.model_validate(
+        {
+            "buttons": [
+                {
+                    "id": "ac_cool",
+                    "label": "冷房25℃",
+                    "type": "remote_command",
+                    "device_id": "remote-1",
+                    "command": "setAll",
+                    "parameter": "25,2,1,on",
+                }
+            ]
+        }
+    )
+    client = FakeSwitchBotClient()
+
+    await ActionExecutor(config, client).execute("ac_cool")
+
+    assert client.calls == [("device", "remote-1", "setAll", "25,2,1,on", "command")]
+
+
+@pytest.mark.asyncio
 async def test_execute_unknown_button():
     config = LauncherConfig.model_validate(
         {
