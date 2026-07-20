@@ -157,3 +157,28 @@ def test_saves_and_overwrites_remote_quick_action(tmp_path):
     assert saved.type == "remote_command"
     assert saved.label == "冷房25℃"
     assert saved.parameter == "25,2,1,on"
+
+
+def test_remote_power_off_does_not_depend_on_air_conditioner_settings(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {"buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}]}
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, FakeClient())
+
+    result = service.save_remote_quick_action(
+        RemoteQuickActionUpdate(
+            label="エアコンOFF",
+            group="空調",
+            device_id="remote-1",
+            command="turnOff",
+            parameter="default",
+        )
+    )
+
+    saved = load_config(config_path).get_button(result["id"])
+    assert saved.command == "turnOff"
+    assert saved.parameter == "default"

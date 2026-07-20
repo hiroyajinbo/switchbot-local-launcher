@@ -1,9 +1,10 @@
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.config import (
     DeviceCommandButton,
@@ -51,10 +52,21 @@ class RemoteQuickActionUpdate(BaseModel):
     label: Annotated[str, Field(min_length=1)]
     group: Annotated[str, Field(min_length=1)] = "リモコン"
     device_id: Annotated[str, Field(min_length=1)]
-    parameter: Annotated[str, Field(pattern=r"^\d+,[1-5],[1-4],(?:on|off)$")]
+    command: str = "setAll"
+    parameter: str
     icon: QuickIcon = "climate"
     icon_badge: QuickIconBadge = "none"
     overwrite: bool = False
+
+    @model_validator(mode="after")
+    def validate_command(self) -> "RemoteQuickActionUpdate":
+        valid_set_all = self.command == "setAll" and re.fullmatch(
+            r"\d+,[1-5],[1-4],on", self.parameter
+        )
+        valid_turn_off = self.command == "turnOff" and self.parameter == "default"
+        if not valid_set_all and not valid_turn_off:
+            raise ValueError("リモコン操作の形式が不正です。")
+        return self
 
 
 class ConfigSyncService:
@@ -174,7 +186,7 @@ class ConfigSyncService:
         return {"removed": removed}
 
     def save_remote_quick_action(self, update: RemoteQuickActionUpdate) -> dict[str, Any]:
-        signature = f"{update.device_id}\0setAll\0{update.parameter}"
+        signature = f"{update.device_id}\0{update.command}\0{update.parameter}"
         button_id = f"remote_{hashlib.sha256(signature.encode()).hexdigest()[:12]}"
         config = load_config(self._config_path)
         existing = config.get_button(button_id)
@@ -187,7 +199,7 @@ class ConfigSyncService:
             group=update.group.strip(),
             type="remote_command",
             device_id=update.device_id,
-            command="setAll",
+            command=update.command,
             parameter=update.parameter,
             icon=update.icon,
             icon_badge=update.icon_badge,

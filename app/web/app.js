@@ -1065,6 +1065,7 @@ function airConditionerControls(item) {
     temperature, mode, fanSpeed, power,
   });
   quickButton.addEventListener("click", () => {
+    if (quickEditor.hidden) quickEditor.updateSuggestedName();
     quickEditor.hidden = !quickEditor.hidden;
   });
 
@@ -1133,11 +1134,13 @@ function airConditionerQuickEditor(item, controls) {
       showToast("表示名とグループを入力してください。", true);
       return;
     }
+    const command = airConditionerQuickCommand(controls);
     const payload = {
       label,
       group: groupName,
       device_id: item.device_id,
-      parameter: airConditionerParameter(controls),
+      command: command.command,
+      parameter: command.parameter,
       icon: icon.select.value,
       icon_badge: "none",
       overwrite: false,
@@ -1164,6 +1167,12 @@ function airConditionerQuickEditor(item, controls) {
     }
   });
   editor.append(name.field, group.field, icon.field, save);
+  editor.updateSuggestedName = () => {
+    const modes = { auto: "自動", cool: "冷房", dry: "除湿", fan: "送風", heat: "暖房" };
+    name.input.value = controls.power.select.value === "off"
+      ? `${item.label} OFF`
+      : `${item.label} ${controls.temperature.select.value}℃ ${modes[controls.mode.select.value]}`;
+  };
   return editor;
 }
 
@@ -1179,15 +1188,21 @@ function labeledTextInput(label, value) {
   return { field, input };
 }
 
-function airConditionerParameter({ temperature, mode, fanSpeed, power }) {
+function airConditionerQuickCommand({ temperature, mode, fanSpeed, power }) {
+  if (power.select.value === "off") {
+    return { command: "turnOff", parameter: "default" };
+  }
   const modeCodes = { auto: 1, cool: 2, dry: 3, fan: 4, heat: 5 };
   const fanCodes = { auto: 1, low: 2, medium: 3, high: 4 };
-  return [
-    temperature.select.value,
-    modeCodes[mode.select.value],
-    fanCodes[fanSpeed.select.value],
-    power.select.value,
-  ].join(",");
+  return {
+    command: "setAll",
+    parameter: [
+      temperature.select.value,
+      modeCodes[mode.select.value],
+      fanCodes[fanSpeed.select.value],
+      "on",
+    ].join(","),
+  };
 }
 
 async function saveRemoteQuickAction(payload) {

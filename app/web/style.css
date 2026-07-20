@@ -651,6 +651,11 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
   background: var(--control-bg);
 }
 .remote-quick-editor[hidden] { display: none; }
+.remote-quick-editor > .mini-button {
+  min-width: 72px;
+  min-height: 36px;
+  white-space: nowrap;
+}
 
 .empty-text {
   color: var(--muted);
