@@ -1,0 +1,84 @@
+:root {
+  color-scheme: light dark;
+  --accent: #148b78;
+  --accent-hover: #0f7464;
+  --bg: #f3f6f8;
+  --surface: #ffffff;
+  --text: #17212b;
+  --muted: #687583;
+  --line: #d9e0e5;
+  --danger: #b9382e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111922;
+    --surface: #1a2631;
+    --text: #edf4f7;
+    --muted: #aab8c3;
+    --line: #344655;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  width: 360px;
+  max-height: 560px;
+  margin: 0;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, "Yu Gothic UI", sans-serif;
+}
+header, footer {
+  position: sticky;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+header { top: 0; border-bottom: 1px solid var(--line); }
+footer { bottom: 0; gap: 10px; border-top: 1px solid var(--line); }
+h1 { margin: 0; font-size: 18px; }
+header p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+main { min-height: 120px; padding: 12px; }
+.group { margin-bottom: 14px; }
+.group:last-child { margin-bottom: 0; }
+.group h2 { margin: 0 0 7px; color: var(--muted); font-size: 12px; }
+.action-list { display: grid; gap: 7px; }
+.action-button {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.action-button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.action-button:disabled { cursor: not-allowed; opacity: .55; }
+.action-icon { font-size: 20px; text-align: center; }
+.action-label { overflow-wrap: anywhere; font-weight: 700; }
+.action-state { color: var(--muted); font-size: 11px; }
+.message { margin: 24px 8px; color: var(--muted); text-align: center; line-height: 1.6; }
+.message.error { color: var(--danger); }
+.icon-button, .text-button {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.icon-button { width: 34px; height: 34px; font-size: 20px; }
+.text-button { flex: 0 0 auto; padding: 6px 9px; font-size: 12px; }
+#statusMessage { margin: 0; color: var(--muted); font-size: 11px; }
+#statusMessage.success { color: var(--accent); }
+#statusMessage.error { color: var(--danger); }
