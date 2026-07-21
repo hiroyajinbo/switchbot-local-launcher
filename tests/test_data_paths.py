@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.data_paths import (
+    PORTABLE_DATA_ROOT_ENV,
     AppDataPaths,
     desktop_data_paths,
     load_desktop_settings,
@@ -15,6 +16,17 @@ def test_desktop_data_paths_use_local_app_data(tmp_path) -> None:
     paths = desktop_data_paths({"LOCALAPPDATA": str(tmp_path)})
 
     assert paths.root == tmp_path / "SwitchBotLocalLauncher"
+
+
+def test_desktop_data_paths_can_use_portable_root(tmp_path) -> None:
+    paths = desktop_data_paths(
+        {
+            PORTABLE_DATA_ROOT_ENV: str(tmp_path / "portable"),
+            "LOCALAPPDATA": str(tmp_path / "local"),
+        }
+    )
+
+    assert paths.root == tmp_path / "portable"
 
 
 def test_prepare_desktop_data_copies_once_without_overwrite(tmp_path) -> None:

@@ -10,6 +10,7 @@ from app.errors import LauncherError
 from app.settings import Settings, load_settings
 
 APP_DATA_DIRECTORY = "SwitchBotLocalLauncher"
+PORTABLE_DATA_ROOT_ENV = "SWITCHBOT_PORTABLE_DATA_ROOT"
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,10 @@ class AppDataPaths:
 
 def desktop_data_paths(environ: Mapping[str, str] | None = None) -> AppDataPaths:
     values = environ or os.environ
+    portable_root = values.get(PORTABLE_DATA_ROOT_ENV, "").strip()
+    if portable_root:
+        return AppDataPaths(Path(portable_root))
+
     local_app_data = values.get("LOCALAPPDATA", "").strip()
     if not local_app_data:
         raise LauncherError("LOCALAPPDATAが見つからないため、PCアプリの保存先を作成できません。")
