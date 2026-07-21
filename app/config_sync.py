@@ -210,6 +210,42 @@ class ConfigSyncService:
         self._write(raw)
         return {"id": button_id, "updated": existing is not None}
 
+    def update_remote_quick_action(
+        self, button_id: str, update: RemoteQuickActionUpdate
+    ) -> dict[str, Any]:
+        config = load_config(self._config_path)
+        existing = config.get_button(button_id)
+        if existing is None:
+            raise ConfigError(f"未定義のボタンIDです: {button_id}")
+        if not isinstance(existing, RemoteCommandButton):
+            raise ConfigError("手動追加したリモコン操作だけを編集できます。")
+
+        signature = f"{update.device_id}\0{update.command}\0{update.parameter}"
+        new_id = f"remote_{hashlib.sha256(signature.encode()).hexdigest()[:12]}"
+        duplicate = config.get_button(new_id)
+        if duplicate is not None and duplicate.id != button_id:
+            raise ConfigError("同じリモコン設定が別のクイック操作に登録済みです。")
+
+        replacement = RemoteCommandButton(
+            id=new_id,
+            label=update.label.strip(),
+            group=update.group.strip(),
+            type="remote_command",
+            device_id=update.device_id,
+            command=update.command,
+            parameter=update.parameter,
+            locked=existing.locked,
+            icon=update.icon,
+            icon_badge=update.icon_badge,
+        )
+        raw = config.model_dump()
+        raw["buttons"] = [
+            replacement.model_dump() if item["id"] == button_id else item
+            for item in raw["buttons"]
+        ]
+        self._write(raw)
+        return {"id": new_id, "previous_id": button_id, "updated": True}
+
     def remove_remote_quick_action(self, button_id: str) -> dict[str, Any]:
         config = load_config(self._config_path)
         button = config.get_button(button_id)

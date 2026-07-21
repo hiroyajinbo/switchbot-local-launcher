@@ -158,7 +158,7 @@ def _format_remote(remote: dict[str, Any]) -> dict[str, Any]:
         "summary": (
             "実状態は取得できません。送信した設定で操作します。"
             if is_air_conditioner
-            else "状態取得対象外。操作する場合はSwitchBotアプリでシーン化してください。"
+            else "詳細操作は取得できません。SwitchBotシーン経由で操作してください。"
         ),
         "controls": {"air_conditioner": is_air_conditioner},
     }

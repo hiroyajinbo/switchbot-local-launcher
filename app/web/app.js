@@ -40,7 +40,7 @@ const quickIconOptions = {
 const quickBadgeOptions = {
   none: "なし", up: "上", down: "下", left: "左", right: "右", on: "ON",
   off: "OFF", power: "電源", play: "再生", pause: "停止", plus: "＋",
-  minus: "－", toggle: "切替",
+  minus: "－", toggle: "切替", cool: "冷房", heat: "暖房",
 };
 
 async function requestJson(url, options = {}) {
@@ -156,6 +156,9 @@ function renderButtons(buttons) {
       lock.addEventListener("click", () => setSceneLock(button.id, !button.locked));
       wrapper.append(element, lock, buttonAppearanceEditor(button));
       if (button.type === "remote_command") {
+        if (button.command === "setAll" || button.command === "turnOff") {
+          wrapper.append(remoteQuickEditButton(button));
+        }
         wrapper.append(remoteQuickDeleteButton(button));
       }
       toolbar.append(wrapper);
@@ -441,6 +444,91 @@ function remoteQuickDeleteButton(button) {
     }
   });
   return remove;
+}
+
+function remoteQuickEditButton(button) {
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "remote-quick-edit edit-only";
+  edit.textContent = "設定編集";
+  edit.addEventListener("click", () => {
+    const wrapper = edit.closest(".scene-action");
+    const existing = wrapper.querySelector(".remote-quick-edit-panel");
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    wrapper.append(remoteQuickEditPanel(button));
+  });
+  return edit;
+}
+
+function remoteQuickEditPanel(button) {
+  const editor = document.createElement("div");
+  editor.className = "remote-quick-editor remote-quick-edit-panel edit-only";
+  const name = labeledTextInput("表示名", button.label);
+  const group = labeledTextInput("グループ", button.group);
+  const values = button.command === "setAll" ? button.parameter.split(",") : ["24", "2", "1"];
+  const temperatures = Array.from({ length: 15 }, (_, index) => String(index + 16));
+  const temperature = remoteSelect("温度", temperatures.map((value) => [value, `${value}℃`]), values[0]);
+  const mode = remoteSelect("モード", [
+    ["1", "自動"], ["2", "冷房"], ["3", "除湿"], ["4", "送風"], ["5", "暖房"],
+  ], values[1]);
+  const fan = remoteSelect("風量", [
+    ["1", "自動"], ["2", "弱"], ["3", "中"], ["4", "強"],
+  ], values[2]);
+  const power = remoteSelect("電源", [["on", "ON"], ["off", "OFF"]],
+    button.command === "turnOff" ? "off" : "on");
+  const icon = remoteSelect("アイコン", Object.entries(quickIconOptions), button.icon || "climate");
+  const badge = remoteSelect(
+    "バッジ", Object.entries(quickBadgeOptions), button.icon_badge || "none",
+  );
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "mini-button";
+  save.textContent = "更新";
+  save.addEventListener("click", async () => {
+    const label = name.input.value.trim();
+    const groupName = group.input.value.trim();
+    if (!label || !groupName) {
+      showToast("表示名とグループを入力してください。", true);
+      return;
+    }
+    const isOff = power.select.value === "off";
+    save.disabled = true;
+    try {
+      await requestJson(`/api/remotes/quick-actions/${button.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label,
+          group: groupName,
+          device_id: button.device_id,
+          command: isOff ? "turnOff" : "setAll",
+          parameter: isOff ? "default" : [
+            temperature.select.value, mode.select.value, fan.select.value, "on",
+          ].join(","),
+          icon: icon.select.value,
+          icon_badge: badge.select.value,
+        }),
+      });
+      await loadButtons();
+      showToast("クイック操作を更新しました。");
+    } catch (error) {
+      save.disabled = false;
+      showToast(error.message, true);
+    }
+  });
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "mini-button secondary";
+  cancel.textContent = "閉じる";
+  cancel.addEventListener("click", () => editor.remove());
+  editor.append(
+    name.field, group.field, temperature.field, mode.field, fan.field, power.field,
+    icon.field, badge.field, save, cancel,
+  );
+  return editor;
 }
 
 function controlField(label, ...elements) {
@@ -882,7 +970,9 @@ function badgeVisual(badge) {
     pause: '<path d="M4 3h3v10H4zm5 0h3v10H9z"/>',
     plus: '<path d="M8 2v12M2 8h12"/>',
     minus: '<path d="M2 8h12"/>',
-    toggle: '<path d="m5 3-3 3 3 3M2 6h12m-3 1 3 3-3 3"/>',
+    toggle: '<path d="M3 5h8m0 0L8.5 2.5M11 5 8.5 7.5M13 11H5m0 0 2.5-2.5M5 11l2.5 2.5"/>',
+    cool: '<path d="M8 1v14M2 4.5l12 7M14 4.5l-12 7M6.5 2.5 8 4l1.5-1.5M6.5 13.5 8 12l1.5 1.5M2.8 6.5 4.8 6l-.5-2M13.2 9.5 11.2 10l.5 2M13.2 6.5 11.2 6l.5-2M2.8 9.5 4.8 10l-.5 2"/>',
+    heat: '<circle cx="8" cy="8" r="3"/><path d="M8 1v2m0 10v2M1 8h2m10 0h2M3 3l1.5 1.5m7 7L13 13m0-10-1.5 1.5m-7 7L3 13"/>',
   };
   return paths[badge]
     ? `<svg viewBox="0 0 16 16" aria-hidden="true">${paths[badge]}</svg>`
@@ -1149,6 +1239,7 @@ function airConditionerQuickEditor(item, controls) {
   const name = labeledTextInput("表示名", `${item.label} 24℃ 冷房`);
   const group = labeledTextInput("グループ", "空調");
   const icon = remoteSelect("アイコン", Object.entries(quickIconOptions), "climate");
+  const badge = remoteSelect("バッジ", Object.entries(quickBadgeOptions), "none");
   const save = document.createElement("button");
   save.type = "button";
   save.className = "mini-button";
@@ -1168,7 +1259,7 @@ function airConditionerQuickEditor(item, controls) {
       command: command.command,
       parameter: command.parameter,
       icon: icon.select.value,
-      icon_badge: "none",
+      icon_badge: badge.select.value,
       overwrite: false,
     };
     save.disabled = true;
@@ -1192,12 +1283,15 @@ function airConditionerQuickEditor(item, controls) {
       save.disabled = false;
     }
   });
-  editor.append(name.field, group.field, icon.field, save);
+  editor.append(name.field, group.field, icon.field, badge.field, save);
   editor.updateSuggestedName = () => {
     const modes = { auto: "自動", cool: "冷房", dry: "除湿", fan: "送風", heat: "暖房" };
     name.input.value = controls.power.select.value === "off"
       ? `${item.label} OFF`
       : `${item.label} ${controls.temperature.select.value}℃ ${modes[controls.mode.select.value]}`;
+    badge.select.value = controls.power.select.value === "on"
+      ? ({ cool: "cool", heat: "heat" }[controls.mode.select.value] || "none")
+      : "off";
   };
   return editor;
 }

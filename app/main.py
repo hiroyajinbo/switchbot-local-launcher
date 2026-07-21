@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.actions import ActionExecutor, ActionResult
-from app.config import load_config
+from app.config import RemoteCommandButton, load_config
 from app.config_sync import (
     ApplyCandidatesRequest,
     ApplyCandidatesResult,
@@ -128,6 +128,15 @@ def create_app(
                     "locked": button.locked,
                     "icon": button.icon,
                     "icon_badge": button.icon_badge,
+                    **(
+                        {
+                            "device_id": button.device_id,
+                            "command": button.command,
+                            "parameter": button.parameter,
+                        }
+                        if isinstance(button, RemoteCommandButton)
+                        else {}
+                    ),
                 }
                 for button in current_executor.buttons
             ]
@@ -309,6 +318,18 @@ def create_app(
         service = _get_config_sync_service(app)
         try:
             result = service.remove_remote_quick_action(button_id)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/api/remotes/quick-actions/{button_id}")
+    async def update_remote_quick_action(
+        button_id: str, update: RemoteQuickActionUpdate
+    ) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.update_remote_quick_action(button_id, update)
             _get_executor(app).replace_config(service.current_config())
             return result
         except LauncherError as exc:

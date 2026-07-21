@@ -13,7 +13,7 @@ QuickIcon = Literal[
 ]
 QuickIconBadge = Literal[
     "none", "up", "down", "left", "right", "on", "off", "power", "play", "pause",
-    "plus", "minus", "toggle",
+    "plus", "minus", "toggle", "cool", "heat",
 ]
 
 class DeviceCommandButton(BaseModel):

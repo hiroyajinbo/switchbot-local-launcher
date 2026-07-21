@@ -184,6 +184,53 @@ def test_remote_power_off_does_not_depend_on_air_conditioner_settings(tmp_path):
     assert saved.parameter == "default"
 
 
+def test_updates_remote_quick_action_in_place_and_preserves_lock(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"},
+                    {
+                        "id": "remote_old",
+                        "label": "AC 24",
+                        "group": "Air",
+                        "type": "remote_command",
+                        "device_id": "remote-1",
+                        "command": "setAll",
+                        "parameter": "24,2,1,on",
+                        "locked": True,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, FakeClient())
+
+    result = service.update_remote_quick_action(
+        "remote_old",
+        RemoteQuickActionUpdate(
+            label="AC 26",
+            group="Living",
+            device_id="remote-1",
+            parameter="26,2,3,on",
+            icon="fan",
+        ),
+    )
+
+    config = load_config(config_path)
+    assert result["previous_id"] == "remote_old"
+    assert [button.type for button in config.buttons] == ["scene", "remote_command"]
+    saved = config.buttons[1]
+    assert saved.id == result["id"]
+    assert saved.label == "AC 26"
+    assert saved.group == "Living"
+    assert saved.parameter == "26,2,3,on"
+    assert saved.locked is True
+    assert saved.icon == "fan"
+
+
 def test_removes_only_manual_remote_quick_actions(tmp_path):
     config_path = tmp_path / "config.json"
     config_path.write_text(

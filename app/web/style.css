@@ -665,13 +665,21 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
   min-height: 36px;
   white-space: nowrap;
 }
-.remote-quick-delete {
+.remote-quick-delete,
+.remote-quick-edit {
   border: 1px solid var(--danger);
   border-radius: 6px;
   padding: 5px 9px;
   background: transparent;
   color: var(--danger);
   cursor: pointer;
+}
+.remote-quick-edit {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.remote-quick-edit-panel {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .empty-text {
