@@ -1,8 +1,11 @@
 const buttonList = document.querySelector("#buttonList");
+const addAllScenesButton = document.querySelector("#addAllScenesButton");
+const addQuickActionGroupButton = document.querySelector("#addQuickActionGroupButton");
 const applyCandidatesButton = document.querySelector("#applyCandidatesButton");
 const addRoomButton = document.querySelector("#addRoomButton");
 const candidateList = document.querySelector("#candidateList");
 const configMessage = document.querySelector("#configMessage");
+const configPanel = document.querySelector("#configPanel");
 const credentialForm = document.querySelector("#credentialForm");
 const credentialMessage = document.querySelector("#credentialMessage");
 const credentialSaveButton = document.querySelector("#credentialSaveButton");
@@ -16,9 +19,13 @@ const desktopLogPath = document.querySelector("#desktopLogPath");
 const desktopStorageMode = document.querySelector("#desktopStorageMode");
 const environmentList = document.querySelector("#environmentList");
 const editModeButton = document.querySelector("#editModeButton");
+const excludedDeviceList = document.querySelector("#excludedDeviceList");
+const excludedSceneList = document.querySelector("#excludedSceneList");
 const historyList = document.querySelector("#historyList");
 const historyCount = document.querySelector("#historyCount");
 const newRoomName = document.querySelector("#newRoomName");
+const newQuickActionGroupName = document.querySelector("#newQuickActionGroupName");
+const manageSceneCandidatesButton = document.querySelector("#manageSceneCandidatesButton");
 const openLogsButton = document.querySelector("#openLogsButton");
 const refreshStatusButton = document.querySelector("#refreshStatusButton");
 const refreshCandidatesButton = document.querySelector("#refreshCandidatesButton");
@@ -27,6 +34,9 @@ const resultMessage = document.querySelector("#resultMessage");
 const resultTime = document.querySelector("#resultTime");
 const removeStaleButton = document.querySelector("#removeStaleButton");
 const staleList = document.querySelector("#staleList");
+const sceneAutoAdd = document.querySelector("#sceneAutoAdd");
+const sceneCandidateCount = document.querySelector("#sceneCandidateCount");
+const sceneCandidateNotice = document.querySelector("#sceneCandidateNotice");
 const statusBadge = document.querySelector("#statusBadge");
 const statusCheckedAt = document.querySelector("#statusCheckedAt");
 const toastRegion = document.querySelector("#toastRegion");
@@ -35,9 +45,14 @@ const executionHistory = [];
 const pendingDeviceDetails = new Map();
 let statusRefreshTimer = null;
 let availableRooms = ["未分類"];
+let availableQuickActionGroups = ["シーン"];
+let excludedDevices = [];
 let latestStatusSnapshot = null;
 let currentButtons = [];
+let latestCandidateData = null;
 let roomEditBusy = false;
+let quickActionGroupEditBusy = false;
+const collapsedQuickActionGroups = loadCollapsedQuickActionGroups();
 const quickIconOptions = {
   scene: "シーン", light: "照明", strip_light: "テープライト", plug: "プラグ",
   bot: "Bot", lock: "鍵", climate: "空調", fan: "扇風機", monitor: "モニター",
@@ -128,16 +143,16 @@ function renderButtons(buttons) {
   currentButtons = buttons;
   buttonList.replaceChildren();
   buttons = buttons.filter((button) => ["scene", "remote_command"].includes(button.type));
-  const groups = new Map();
+  const groups = new Map(availableQuickActionGroups.map((groupName) => [groupName, []]));
   buttons.forEach((button) => {
-    const groupName = button.group || "その他";
+    const groupName = button.group || "シーン";
     groups.set(groupName, [...(groups.get(groupName) || []), button]);
   });
   groups.forEach((groupButtons, groupName) => {
     const section = document.createElement("section");
-    section.className = "action-group";
-    const heading = document.createElement("h2");
-    heading.textContent = groupName;
+    const collapsed = collapsedQuickActionGroups.has(groupName);
+    section.className = `action-group${collapsed ? " collapsed" : ""}${groupButtons.length === 0 ? " empty-group" : ""}`;
+    const heading = quickActionGroupHeading(groupName, groupButtons.length, collapsed);
     const toolbar = document.createElement("div");
     toolbar.className = "toolbar";
     groupButtons.forEach((button) => {
@@ -168,6 +183,8 @@ function renderButtons(buttons) {
           wrapper.append(remoteQuickEditButton(button));
         }
         wrapper.append(remoteQuickDeleteButton(button));
+      } else if (button.type === "scene") {
+        wrapper.append(sceneDeleteButton(button));
       }
       toolbar.append(wrapper);
     });
@@ -454,6 +471,28 @@ function remoteQuickDeleteButton(button) {
   return remove;
 }
 
+function sceneDeleteButton(button) {
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "scene-delete edit-only";
+  remove.textContent = "削除・除外";
+  remove.addEventListener("click", async () => {
+    if (!window.confirm(`「${button.label}」を削除し、今後の追加候補から除外しますか？`)) return;
+    remove.disabled = true;
+    try {
+      await requestJson(`/api/config/scenes/${button.id}`, { method: "DELETE" });
+      await loadButtons();
+      await refreshCandidates({ silent: true });
+      showToast(`${button.label}を削除・除外しました。`);
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      remove.disabled = false;
+    }
+  });
+  return remove;
+}
+
 function remoteQuickEditButton(button) {
   const edit = document.createElement("button");
   edit.type = "button";
@@ -475,7 +514,11 @@ function remoteQuickEditPanel(button) {
   const editor = document.createElement("div");
   editor.className = "remote-quick-editor remote-quick-edit-panel edit-only";
   const name = labeledTextInput("表示名", button.label);
-  const group = labeledTextInput("グループ", button.group);
+  const group = remoteSelect(
+    "グループ",
+    quickActionGroupOptions(button.group),
+    button.group || availableQuickActionGroups[0] || "シーン",
+  );
   const values = button.command === "setAll" ? button.parameter.split(",") : ["24", "2", "1"];
   const temperatures = Array.from({ length: 15 }, (_, index) => String(index + 16));
   const temperature = remoteSelect("温度", temperatures.map((value) => [value, `${value}℃`]), values[0]);
@@ -497,9 +540,9 @@ function remoteQuickEditPanel(button) {
   save.textContent = "更新";
   save.addEventListener("click", async () => {
     const label = name.input.value.trim();
-    const groupName = group.input.value.trim();
-    if (!label || !groupName) {
-      showToast("表示名とグループを入力してください。", true);
+    const groupName = group.select.value;
+    if (!label) {
+      showToast("表示名を入力してください。", true);
       return;
     }
     const isOff = power.select.value === "off";
@@ -758,15 +801,21 @@ function preferenceControls(item) {
   lock.setAttribute("aria-label", lock.title);
   lock.innerHTML = svgIcon(item.locked ? "locked" : "unlocked");
   lock.addEventListener("click", () => savePreference(item, { locked: !item.locked }));
+  const hide = document.createElement("button");
+  hide.type = "button";
+  hide.className = "device-hide-button edit-only";
+  hide.textContent = "非表示";
+  hide.title = `${item.label}をランチャーから非表示`;
+  hide.addEventListener("click", () => excludeDevice(item));
   const saveStatus = document.createElement("span");
   saveStatus.className = "preference-save-status";
   saveStatus.setAttribute("aria-live", "polite");
-  controls.append(room, lock, saveStatus);
+  controls.append(room, hide, lock, saveStatus);
   return controls;
 }
 
 function deviceMainWithIcon(item) {
-  const wrapper = deviceMain(item.label, item.type, friendlyDeviceStatus(item));
+  const wrapper = deviceMain(item.label, friendlyDeviceType(item.type), friendlyDeviceStatus(item));
   wrapper.querySelector(".device-meta").title = `${item.type} / ${item.summary}`;
   const button = document.createElement("button");
   button.type = "button";
@@ -900,15 +949,56 @@ function friendlyDeviceStatus(item) {
   return "状態情報なし";
 }
 
+function friendlyDeviceType(type) {
+  const labels = {
+    "Strip Light": "テープライト",
+    "Color Bulb": "カラー電球",
+    "Ceiling Light": "シーリングライト",
+    "Contact Sensor": "開閉センサー",
+    "Hub Mini2": "ハブミニ2",
+    "Hub 2": "ハブ2",
+    "Smart Lock": "スマートロック",
+    "Bot": "ボット",
+    "Plug Mini (JP)": "プラグミニ",
+  };
+  return labels[type] || type || "デバイス";
+}
+
 function buttonAppearanceEditor(button) {
   const editor = document.createElement("details");
   editor.className = "scene-appearance-editor edit-only";
+  const editorLabel = "表示設定";
   let selectedIcon = button.icon || "scene";
   let selectedBadge = button.icon_badge || "none";
   const summary = document.createElement("summary");
-  summary.append(quickActionIcon(selectedIcon, selectedBadge), document.createTextNode("アイコン設定"));
+  summary.append(quickActionIcon(selectedIcon, selectedBadge), document.createTextNode(editorLabel));
   const panel = document.createElement("div");
   panel.className = "scene-appearance-panel";
+  let groupSelect = null;
+  if (["scene", "remote_command"].includes(button.type)) {
+    const groupField = document.createElement("label");
+    groupField.className = "scene-group-field";
+    const groupTitle = document.createElement("strong");
+    groupTitle.textContent = "グループ";
+    groupSelect = document.createElement("select");
+    quickActionGroupOptions(button.group).forEach(([value, label]) => {
+      groupSelect.append(new Option(label, value));
+    });
+    groupSelect.value = button.group || availableQuickActionGroups[0] || "シーン";
+    groupSelect.setAttribute("aria-label", `${button.label}のグループ`);
+    const groupHint = document.createElement("small");
+    groupHint.textContent = "変更するとすぐ保存されます";
+    groupSelect.addEventListener("change", () => {
+      setButtonAppearance(
+        button,
+        button.icon || (button.type === "remote_command" ? "climate" : "scene"),
+        button.icon_badge || "none",
+        groupSelect.value,
+      );
+    });
+    groupField.append(groupTitle, groupSelect, groupHint);
+    panel.append(groupField);
+  }
   const iconTitle = document.createElement("strong");
   iconTitle.textContent = "ベースアイコン";
   const iconGrid = document.createElement("div");
@@ -927,7 +1017,7 @@ function buttonAppearanceEditor(button) {
     });
     summary.replaceChildren(
       quickActionIcon(selectedIcon, selectedBadge),
-      document.createTextNode("アイコン設定"),
+      document.createTextNode(editorLabel),
     );
   };
 
@@ -945,7 +1035,7 @@ function buttonAppearanceEditor(button) {
   const apply = document.createElement("button");
   apply.type = "button";
   apply.className = "appearance-apply-button";
-  apply.textContent = "適用";
+  apply.textContent = "アイコンを適用";
   apply.addEventListener("click", () => setButtonAppearance(button, selectedIcon, selectedBadge));
   panel.append(iconTitle, iconGrid, badgeTitle, badgeGrid, apply);
   editor.append(summary, panel);
@@ -987,17 +1077,22 @@ function badgeVisual(badge) {
     : "";
 }
 
-async function setButtonAppearance(button, icon, iconBadge) {
-  const previous = { icon: button.icon || "scene", icon_badge: button.icon_badge || "none" };
+async function setButtonAppearance(button, icon, iconBadge, group = undefined) {
+  const previous = {
+    icon: button.icon || "scene",
+    icon_badge: button.icon_badge || "none",
+    group: button.group,
+  };
   button.icon = icon;
   button.icon_badge = iconBadge;
+  if (group !== undefined) button.group = group;
   renderButtons(currentButtons);
   try {
     await requestJson(`/api/buttons/${button.id}/appearance`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ icon, icon_badge: iconBadge }),
+      body: JSON.stringify({ icon, icon_badge: iconBadge, group }),
     });
-    showToast("クイック操作のアイコンを保存しました。");
+    showToast(group === undefined ? "クイック操作のアイコンを保存しました。" : "クイック操作のグループを保存しました。");
   } catch (error) {
     Object.assign(button, previous);
     renderButtons(currentButtons);
@@ -1158,6 +1253,75 @@ function renderRemotes(items) {
   });
 }
 
+function loadCollapsedQuickActionGroups() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("switchbot-collapsed-quick-action-groups") || "[]");
+    return new Set(Array.isArray(saved) ? saved.filter((item) => typeof item === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function quickActionGroupHeading(groupName, count, collapsed) {
+  const heading = document.createElement("div");
+  heading.className = "action-group-heading";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "action-group-toggle";
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  toggle.title = collapsed ? `${groupName}を展開` : `${groupName}を折りたたむ`;
+  const label = document.createElement("span");
+  label.className = "action-group-name";
+  label.textContent = groupName;
+  const meta = document.createElement("small");
+  meta.textContent = `${count}件`;
+  const marker = document.createElement("span");
+  marker.className = "action-group-marker";
+  marker.setAttribute("aria-hidden", "true");
+  marker.innerHTML = '<svg viewBox="0 0 16 16"><path d="m3.5 6 4.5 4 4.5-4"/></svg>';
+  marker.classList.toggle("collapsed", collapsed);
+  toggle.append(label, meta, marker);
+  toggle.addEventListener("click", () => {
+    if (collapsedQuickActionGroups.has(groupName)) {
+      collapsedQuickActionGroups.delete(groupName);
+    } else {
+      collapsedQuickActionGroups.add(groupName);
+    }
+    localStorage.setItem(
+      "switchbot-collapsed-quick-action-groups",
+      JSON.stringify([...collapsedQuickActionGroups]),
+    );
+    renderButtons(currentButtons);
+  });
+  heading.append(toggle, quickActionGroupMenu(groupName));
+  return heading;
+}
+
+function quickActionGroupMenu(groupName) {
+  const menu = document.createElement("details");
+  menu.className = "room-action-menu quick-action-group-menu edit-only";
+  const trigger = document.createElement("summary");
+  trigger.textContent = "…";
+  trigger.title = `${groupName}のメニュー`;
+  trigger.setAttribute("aria-label", trigger.title);
+  const panel = document.createElement("div");
+  panel.className = "room-action-panel";
+  const index = availableQuickActionGroups.indexOf(groupName);
+  const up = controlButton("↑ 上へ移動", () => moveQuickActionGroup(groupName, -1));
+  up.disabled = quickActionGroupEditBusy || index <= 0;
+  const down = controlButton("↓ 下へ移動", () => moveQuickActionGroup(groupName, 1));
+  down.disabled = quickActionGroupEditBusy || index < 0 || index >= availableQuickActionGroups.length - 1;
+  panel.append(up, down);
+  if (groupName !== "シーン") {
+    const remove = controlButton("グループを削除", () => removeQuickActionGroup(groupName));
+    remove.classList.add("room-remove");
+    remove.disabled = quickActionGroupEditBusy;
+    panel.append(remove);
+  }
+  menu.append(trigger, panel);
+  return menu;
+}
+
 function airConditionerControls(item) {
   const wrapper = document.createElement("form");
   wrapper.className = "air-conditioner-controls";
@@ -1245,7 +1409,8 @@ function airConditionerQuickEditor(item, controls) {
   editor.hidden = true;
 
   const name = labeledTextInput("表示名", `${item.label} 24℃ 冷房`);
-  const group = labeledTextInput("グループ", "空調");
+  const defaultGroup = availableQuickActionGroups.includes("空調") ? "空調" : "シーン";
+  const group = remoteSelect("グループ", quickActionGroupOptions(defaultGroup), defaultGroup);
   const icon = remoteSelect("アイコン", Object.entries(quickIconOptions), "climate");
   const badge = remoteSelect("バッジ", Object.entries(quickBadgeOptions), "none");
   const save = document.createElement("button");
@@ -1254,9 +1419,9 @@ function airConditionerQuickEditor(item, controls) {
   save.textContent = "追加";
   save.addEventListener("click", async () => {
     const label = name.input.value.trim();
-    const groupName = group.input.value.trim();
-    if (!label || !groupName) {
-      showToast("表示名とグループを入力してください。", true);
+    const groupName = group.select.value;
+    if (!label) {
+      showToast("表示名を入力してください。", true);
       return;
     }
     const command = airConditionerQuickCommand(controls);
@@ -1360,6 +1525,12 @@ function remoteSelect(label, options, selected) {
   return { field, select };
 }
 
+function quickActionGroupOptions(currentGroup = "") {
+  const groups = [...availableQuickActionGroups];
+  if (currentGroup && !groups.includes(currentGroup)) groups.push(currentGroup);
+  return groups.map((groupName) => [groupName, groupName]);
+}
+
 function remoteSettingLabel(setting) {
   const modes = { auto: "自動", cool: "冷房", dry: "除湿", fan: "送風", heat: "暖房" };
   const fans = { auto: "風量自動", low: "風量弱", medium: "風量中", high: "風量強" };
@@ -1448,11 +1619,14 @@ function emptyText(message) {
   return element;
 }
 
-async function refreshCandidates() {
+async function refreshCandidates(options = {}) {
+  const silent = options?.silent === true;
+  const suppressAutoAddedToast = options?.suppressAutoAddedToast === true;
   refreshCandidatesButton.disabled = true;
-  configMessage.textContent = "取得中...";
+  if (!silent) configMessage.textContent = "取得中...";
   try {
     const data = await requestJson("/api/config/candidates", { method: "POST" });
+    latestCandidateData = data;
     candidateList.replaceChildren();
     data.candidates.forEach((candidate) => {
       const label = document.createElement("label");
@@ -1467,6 +1641,11 @@ async function refreshCandidates() {
       candidateList.append(label);
     });
     if (data.candidates.length === 0) candidateList.append(emptyText("追加候補はありません。"));
+
+    renderSceneCandidateNotice(data);
+    renderExcludedScenes(data.excluded_scenes || []);
+    sceneAutoAdd.checked = Boolean(data.scene_auto_add);
+
     staleList.replaceChildren();
     data.stale.forEach((candidate) => {
       const label = document.createElement("label");
@@ -1481,9 +1660,17 @@ async function refreshCandidates() {
       staleList.append(label);
     });
     if (data.stale.length === 0) staleList.append(emptyText("削除候補はありません。"));
-    configMessage.textContent = `追加候補 ${data.candidates.length}件 / 削除候補 ${data.stale.length}件`;
+    configMessage.textContent = `追加候補 ${data.candidates.length}件 / 除外済みシーン ${(data.excluded_scenes || []).length}件 / 取得不可 ${data.stale.length}件`;
+    if (data.auto_added > 0) {
+      await loadButtons();
+      if (!suppressAutoAddedToast) {
+        showToast(`新しいシーン${data.auto_added}件を自動追加しました。`);
+      }
+    }
+    return data;
   } catch (error) {
     configMessage.textContent = error.message;
+    return null;
   } finally {
     refreshCandidatesButton.disabled = false;
     updateApplyButton();
@@ -1558,6 +1745,175 @@ async function refreshStatus() {
 async function loadRooms() {
   const data = await requestJson("/api/rooms");
   availableRooms = data.rooms || ["未分類"];
+}
+
+async function loadDeviceExclusions() {
+  const data = await requestJson("/api/device-exclusions");
+  excludedDevices = data.devices || [];
+  renderExcludedDevices();
+}
+
+function renderExcludedDevices() {
+  excludedDeviceList.replaceChildren();
+  excludedDevices.forEach((device) => {
+    const row = document.createElement("div");
+    row.className = "candidate-item";
+    const label = document.createElement("span");
+    label.textContent = device.label;
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "icon-button";
+    restore.textContent = "表示へ戻す";
+    restore.addEventListener("click", () => restoreExcludedDevice(device, restore));
+    row.append(label, restore);
+    excludedDeviceList.append(row);
+  });
+  if (excludedDevices.length === 0) {
+    excludedDeviceList.append(emptyText("非表示デバイスはありません。"));
+  }
+}
+
+async function excludeDevice(item) {
+  const confirmed = window.confirm(
+    `「${item.label}」をこのランチャーから非表示にしますか？\nSwitchBot本体からは削除されず、デバイス設定も保持されます。`,
+  );
+  if (!confirmed) return;
+  const previousSnapshot = cloneSnapshot(latestStatusSnapshot);
+  if (latestStatusSnapshot) {
+    latestStatusSnapshot.devices = latestStatusSnapshot.devices.filter(
+      (device) => device.device_id !== item.device_id,
+    );
+    renderStatus(latestStatusSnapshot);
+  }
+  try {
+    const result = await requestJson(
+      `/api/devices/${encodeURIComponent(item.device_id)}/exclusion`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: item.label }),
+      },
+    );
+    excludedDevices = result.devices || [];
+    renderExcludedDevices();
+    showToast(`${item.label}をランチャーから非表示にしました。`);
+  } catch (error) {
+    if (previousSnapshot) {
+      latestStatusSnapshot = previousSnapshot;
+      renderStatus(latestStatusSnapshot);
+    }
+    showToast(error.message, true);
+  }
+}
+
+async function restoreExcludedDevice(device, button) {
+  button.disabled = true;
+  try {
+    const result = await requestJson(
+      `/api/devices/${encodeURIComponent(device.device_id)}/exclusion`,
+      { method: "DELETE" },
+    );
+    excludedDevices = result.devices || [];
+    renderExcludedDevices();
+    await refreshStatus();
+    showToast(`${device.label}をデバイス一覧へ戻しました。`);
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message, true);
+  }
+}
+
+async function loadQuickActionGroups() {
+  const data = await requestJson("/api/quick-action-groups");
+  availableQuickActionGroups = data.groups || ["シーン"];
+}
+
+async function addQuickActionGroup() {
+  const group = newQuickActionGroupName.value.trim();
+  if (!group || quickActionGroupEditBusy) return;
+  const previousGroups = [...availableQuickActionGroups];
+  if (!availableQuickActionGroups.includes(group)) {
+    availableQuickActionGroups = [...availableQuickActionGroups, group];
+  }
+  newQuickActionGroupName.value = "";
+  setQuickActionGroupEditBusy(true);
+  try {
+    const data = await requestJson("/api/quick-action-groups", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group }),
+    });
+    availableQuickActionGroups = data.groups;
+    setQuickActionGroupEditBusy(false);
+    showToast(`${group}を追加しました。`);
+  } catch (error) {
+    availableQuickActionGroups = previousGroups;
+    setQuickActionGroupEditBusy(false);
+    showToast(error.message, true);
+  }
+}
+
+async function moveQuickActionGroup(group, direction) {
+  if (quickActionGroupEditBusy) return;
+  const currentIndex = availableQuickActionGroups.indexOf(group);
+  const nextIndex = currentIndex + direction;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= availableQuickActionGroups.length) return;
+  const groups = [...availableQuickActionGroups];
+  [groups[currentIndex], groups[nextIndex]] = [groups[nextIndex], groups[currentIndex]];
+  const previousGroups = availableQuickActionGroups;
+  availableQuickActionGroups = groups;
+  setQuickActionGroupEditBusy(true);
+  try {
+    const data = await requestJson("/api/quick-action-groups/order", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groups }),
+    });
+    availableQuickActionGroups = data.groups;
+    setQuickActionGroupEditBusy(false);
+    showToast("クイック操作グループの並び順を保存しました。");
+  } catch (error) {
+    availableQuickActionGroups = previousGroups;
+    setQuickActionGroupEditBusy(false);
+    showToast(error.message, true);
+  }
+}
+
+async function removeQuickActionGroup(group) {
+  if (quickActionGroupEditBusy) return;
+  const confirmed = window.confirm(
+    `「${group}」を削除しますか？\n所属するクイック操作は「シーン」へ移動します。`,
+  );
+  if (!confirmed) return;
+  const previousGroups = [...availableQuickActionGroups];
+  const previousButtons = JSON.parse(JSON.stringify(currentButtons));
+  availableQuickActionGroups = availableQuickActionGroups.filter((item) => item !== group);
+  currentButtons.forEach((button) => {
+    if (["scene", "remote_command"].includes(button.type) && button.group === group) {
+      button.group = "シーン";
+    }
+  });
+  collapsedQuickActionGroups.delete(group);
+  setQuickActionGroupEditBusy(true);
+  try {
+    const result = await requestJson(`/api/quick-action-groups/${encodeURIComponent(group)}`, {
+      method: "DELETE",
+    });
+    availableQuickActionGroups = result.groups;
+    setQuickActionGroupEditBusy(false);
+    const moved = result.moved_buttons;
+    showToast(moved > 0 ? `${group}を削除し、${moved}件をシーンへ移動しました。` : `${group}を削除しました。`);
+  } catch (error) {
+    availableQuickActionGroups = previousGroups;
+    currentButtons = previousButtons;
+    setQuickActionGroupEditBusy(false);
+    showToast(error.message, true);
+  }
+}
+
+function setQuickActionGroupEditBusy(busy) {
+  quickActionGroupEditBusy = busy;
+  addQuickActionGroupButton.disabled = busy;
+  renderButtons(currentButtons);
 }
 
 async function addRoom() {
@@ -1758,6 +2114,105 @@ async function saveCredentials(event) {
   }
 }
 
+function renderSceneCandidateNotice(data) {
+  const scenes = (data.candidates || []).filter((candidate) => candidate.type === "scene");
+  sceneCandidateNotice.hidden = scenes.length === 0;
+  sceneCandidateCount.textContent = `未追加のシーン ${scenes.length}件`;
+  addAllScenesButton.disabled = scenes.length === 0;
+}
+
+function renderExcludedScenes(scenes) {
+  excludedSceneList.replaceChildren();
+  scenes.forEach((scene) => {
+    const row = document.createElement("div");
+    row.className = "candidate-item";
+    const label = document.createElement("span");
+    label.textContent = scene.label;
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "icon-button";
+    restore.textContent = "除外解除";
+    restore.addEventListener("click", () => restoreExcludedScene(scene, restore));
+    row.append(label, restore);
+    excludedSceneList.append(row);
+  });
+  if (scenes.length === 0) {
+    excludedSceneList.append(emptyText("除外済みシーンはありません。"));
+  }
+}
+
+async function restoreExcludedScene(scene, button) {
+  button.disabled = true;
+  try {
+    await requestJson(`/api/config/scenes/exclusions/${encodeURIComponent(scene.source_id)}`, {
+      method: "DELETE",
+    });
+    const data = await refreshCandidates({ silent: true, suppressAutoAddedToast: true });
+    if (!data) return;
+    if (data.auto_added > 0) {
+      showToast(`${scene.label}の除外を解除し、新しいシーン${data.auto_added}件を自動追加しました。`);
+    } else if ((data.candidates || []).some((candidate) => candidate.source_id === scene.source_id)) {
+      showToast(`${scene.label}を追加候補へ戻しました。`);
+    } else {
+      showToast(`${scene.label}の除外を解除しました。現在のSwitchBot一覧にないため候補には表示されません。`);
+    }
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function addAllScenes() {
+  const ids = (latestCandidateData?.candidates || [])
+    .filter((candidate) => candidate.type === "scene")
+    .map((candidate) => candidate.id);
+  if (ids.length === 0) return;
+  addAllScenesButton.disabled = true;
+  try {
+    const result = await requestJson("/api/config/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    await loadButtons();
+    await refreshCandidates({ silent: true });
+    showToast(`シーン${result.added}件を追加しました。`);
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    addAllScenesButton.disabled = false;
+  }
+}
+
+function manageSceneCandidates() {
+  if (!document.body.classList.contains("edit-mode")) {
+    document.body.classList.add("edit-mode");
+    editModeButton.textContent = "完了";
+    editModeButton.setAttribute("aria-pressed", "true");
+  }
+  configPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function updateSceneAutoAdd() {
+  const enabled = sceneAutoAdd.checked;
+  sceneAutoAdd.disabled = true;
+  try {
+    await requestJson("/api/config/scenes/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ auto_add: enabled }),
+    });
+    await refreshCandidates({ silent: true });
+    showToast(enabled ? "新しいシーンの自動追加を有効にしました。" : "シーンの自動追加を無効にしました。");
+  } catch (error) {
+    sceneAutoAdd.checked = !enabled;
+    showToast(error.message, true);
+  } finally {
+    sceneAutoAdd.disabled = false;
+  }
+}
+
 async function boot() {
   try {
     const setup = await requestJson("/api/setup/status");
@@ -1770,7 +2225,9 @@ async function boot() {
     if (!health.ok) {
       throw new Error(health.error || "初期化に失敗しました。");
     }
-    await Promise.all([loadButtons(), loadDesktopStatus()]);
+    await Promise.all([loadQuickActionGroups(), loadDeviceExclusions(), loadDesktopStatus()]);
+    await loadButtons();
+    await refreshCandidates({ silent: true });
     await refreshStatus();
     setStatus(true, "準備完了");
   } catch (error) {
@@ -1781,8 +2238,18 @@ async function boot() {
 
 refreshStatusButton.addEventListener("click", refreshStatus);
 refreshCandidatesButton.addEventListener("click", refreshCandidates);
+addAllScenesButton.addEventListener("click", addAllScenes);
+addQuickActionGroupButton.addEventListener("click", addQuickActionGroup);
+manageSceneCandidatesButton.addEventListener("click", manageSceneCandidates);
+sceneAutoAdd.addEventListener("change", updateSceneAutoAdd);
 applyCandidatesButton.addEventListener("click", applyCandidates);
 addRoomButton.addEventListener("click", addRoom);
+newRoomName.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") addRoom();
+});
+newQuickActionGroupName.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") addQuickActionGroup();
+});
 removeStaleButton.addEventListener("click", removeStale);
 desktopAutostart.addEventListener("change", updateDesktopAutostart);
 openLogsButton.addEventListener("click", openDesktopLogs);

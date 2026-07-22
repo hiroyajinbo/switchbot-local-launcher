@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SwitchBot Local Launcher</title>
-    <link rel="stylesheet" href="/static/style.css?v=mvp3-credentials-1" />
+    <link rel="stylesheet" href="/static/style.css?v=mvp3-device-card-polish-1" />
   </head>
   <body>
     <main class="shell">
@@ -74,7 +74,27 @@
       </section>
 
       <section class="scene-panel" aria-label="シーン">
-        <div class="section-heading"><h2>クイック操作</h2></div>
+        <div class="section-heading">
+          <h2>クイック操作</h2>
+          <div class="quick-action-group-creator">
+            <input id="newQuickActionGroupName" type="text" placeholder="新しいグループ" />
+            <button id="addQuickActionGroupButton" class="icon-button" type="button">グループを追加</button>
+          </div>
+        </div>
+        <div id="sceneCandidateNotice" class="scene-candidate-notice" hidden>
+          <div>
+            <strong id="sceneCandidateCount">未追加のシーンがあります</strong>
+            <span>SwitchBotから新しいシーンを取得しました。</span>
+          </div>
+          <div class="scene-candidate-actions">
+            <button id="manageSceneCandidatesButton" class="icon-button" type="button">
+              個別に選ぶ
+            </button>
+            <button id="addAllScenesButton" class="apply-button" type="button">
+              すべて追加
+            </button>
+          </div>
+        </div>
         <div id="buttonList" class="action-groups"></div>
       </section>
 
@@ -91,15 +111,34 @@
         </div>
       </section>
 
-      <section class="config-panel" aria-label="設定更新">
+      <section id="configPanel" class="config-panel" aria-label="設定更新">
         <div class="section-heading">
           <h2>機器・シーン設定</h2>
-          <button id="refreshCandidatesButton" class="icon-button" type="button">最新候補を取得</button>
+          <button id="refreshCandidatesButton" class="icon-button" type="button">候補を再取得</button>
         </div>
+        <label class="scene-auto-add-setting">
+          <input id="sceneAutoAdd" type="checkbox" />
+          <span>
+            <strong>新しいシーンを自動追加</strong>
+            <small>起動時に見つかった未追加シーンを追加します。除外済みシーンは対象外です。</small>
+          </span>
+        </label>
+        <h3 class="config-subheading">追加候補</h3>
         <div id="candidateList" class="candidate-list">
-          <div class="empty-text">必要なときだけ最新候補を取得してください。</div>
+          <div class="empty-text">候補を取得しています。</div>
         </div>
         <button id="applyCandidatesButton" class="apply-button" type="button" disabled>選択項目を設定へ追加</button>
+        <h3 class="config-subheading">除外済みシーン</h3>
+        <p class="config-help">除外中は自動追加されません。自動追加がONの場合、除外解除したシーンは取得できればすぐ追加されます。</p>
+        <div id="excludedSceneList" class="candidate-list excluded-scene-list">
+          <div class="empty-text">除外済みシーンはありません。</div>
+        </div>
+        <h3 class="config-subheading">非表示デバイス</h3>
+        <p class="config-help">ランチャー上だけ非表示にしたデバイスです。部屋・アイコン・ロック・マイセット設定は保持されます。</p>
+        <div id="excludedDeviceList" class="candidate-list excluded-device-list">
+          <div class="empty-text">非表示デバイスはありません。</div>
+        </div>
+        <h3 class="config-subheading">取得できない設定</h3>
         <div id="staleList" class="candidate-list stale-list"></div>
         <button id="removeStaleButton" class="danger-button" type="button" disabled>選択した存在しない設定を削除</button>
         <div id="configMessage" class="checked-at"></div>
@@ -142,6 +181,6 @@
     </main>
     <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=mvp3-credentials-1"></script>
+    <script src="/static/app.js?v=mvp3-device-card-polish-1"></script>
   </body>
 </html>

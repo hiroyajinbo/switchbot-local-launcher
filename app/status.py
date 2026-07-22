@@ -34,6 +34,11 @@ class DeviceStatusService:
         devices_body = devices_response.get("body", {})
         devices = _collect_physical_devices(devices_body)
         remotes = _collect_infrared_remotes(devices_body)
+        if self._config_path is not None:
+            excluded_device_ids = set(load_config(self._config_path).excluded_devices)
+            devices = [
+                device for device in devices if device.get("deviceId") not in excluded_device_ids
+            ]
         status_items = []
         errors = []
 

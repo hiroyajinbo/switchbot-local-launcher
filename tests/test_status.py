@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.errors import SwitchBotApiError
@@ -89,3 +91,31 @@ async def test_status_snapshot_keeps_last_device_state_on_temporary_error():
     assert snapshot.devices[0]["stale"] is True
     assert snapshot.devices[0]["status_error"] == "temporary error"
     assert snapshot.errors[0]["device_id"] == "light-1"
+
+
+@pytest.mark.asyncio
+async def test_status_snapshot_skips_excluded_devices(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [],
+                "excluded_devices": {"light-1": "Light"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = FakeSwitchBotClient()
+    original_get_status = client.get_device_status
+    requested_ids = []
+
+    async def track_status_request(device_id):
+        requested_ids.append(device_id)
+        return await original_get_status(device_id)
+
+    client.get_device_status = track_status_request
+    snapshot = await DeviceStatusService(client, config_path).snapshot()
+
+    assert [item["device_id"] for item in snapshot.environment] == ["hub-1"]
+    assert snapshot.devices == []
+    assert requested_ids == ["hub-1"]

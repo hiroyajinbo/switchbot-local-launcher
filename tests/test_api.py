@@ -3,7 +3,8 @@ import json
 from fastapi.testclient import TestClient
 
 from app.actions import ActionResult
-from app.config import LauncherConfig
+from app.config import LauncherConfig, load_config
+from app.config_sync import ConfigSyncService
 from app.credential_store import StoredCredentials
 from app.device_preferences import DevicePreferenceService
 from app.errors import SecretConfigError, SwitchBotApiError
@@ -37,6 +38,18 @@ class FakeExecutor:
             message="照明 ON 成功",
             executed_at="2026-07-10 10:30:00",
         )
+
+    def replace_config(self, config):
+        self.config = config
+        self.buttons = config.buttons
+
+
+class FakeDiscoveryClient:
+    async def get_devices(self):
+        return {"body": {"deviceList": [], "infraredRemoteList": []}}
+
+    async def get_scenes(self):
+        return {"body": [{"sceneId": "scene-1", "sceneName": "帰宅"}]}
 
 
 class FakeStatusService:
@@ -173,6 +186,120 @@ def test_index_disables_browser_cache():
     assert response.text.index('class="scene-panel"') < response.text.index(
         'class="device-panel primary-panel"'
     )
+
+
+def test_scene_auto_add_refreshes_buttons_endpoint(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [],
+                "scene_sync": {"auto_add": True, "excluded_scene_ids": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+    executor = FakeExecutor()
+    sync_service = ConfigSyncService(config_path, FakeDiscoveryClient())
+    app = create_app(
+        executor=executor,
+        status_service=FakeStatusService(),
+        config_sync_service=sync_service,
+    )
+
+    with TestClient(app) as client:
+        candidates = client.post("/api/config/candidates")
+        buttons = client.get("/api/buttons")
+
+    assert candidates.status_code == 200
+    assert candidates.json()["auto_added"] == 1
+    assert [button["label"] for button in buttons.json()["buttons"]] == ["帰宅"]
+
+
+def test_scene_delete_exclusion_restore_and_setting_endpoints(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {
+                        "id": "scene_home",
+                        "label": "帰宅",
+                        "type": "scene",
+                        "scene_id": "scene-1",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    executor = FakeExecutor()
+    sync_service = ConfigSyncService(config_path, FakeDiscoveryClient())
+    app = create_app(
+        executor=executor,
+        status_service=FakeStatusService(),
+        config_sync_service=sync_service,
+    )
+
+    with TestClient(app) as client:
+        removed = client.delete("/api/config/scenes/scene_home")
+        after_remove = client.post("/api/config/candidates")
+        restored = client.delete("/api/config/scenes/exclusions/scene-1")
+        after_restore = client.post("/api/config/candidates")
+        setting = client.put("/api/config/scenes/settings", json={"auto_add": True})
+
+    assert removed.status_code == 200
+    assert after_remove.json()["excluded_scenes"][0]["source_id"] == "scene-1"
+    assert restored.json() == {"scene_id": "scene-1", "excluded": False}
+    assert [item["source_id"] for item in after_restore.json()["candidates"]] == [
+        "scene-1"
+    ]
+    assert setting.json() == {"auto_add": True}
+    assert load_config(config_path).scene_sync.auto_add is True
+
+
+def test_quick_action_group_endpoints_add_reorder_and_remove(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "quick_action_groups": ["シーン", "空調"],
+                "buttons": [
+                    {
+                        "id": "scene_home",
+                        "label": "帰宅",
+                        "group": "空調",
+                        "type": "scene",
+                        "scene_id": "scene-1",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    executor = FakeExecutor()
+    sync_service = ConfigSyncService(config_path, FakeDiscoveryClient())
+    app = create_app(
+        executor=executor,
+        status_service=FakeStatusService(),
+        config_sync_service=sync_service,
+    )
+
+    with TestClient(app) as client:
+        initial = client.get("/api/quick-action-groups")
+        added = client.post("/api/quick-action-groups", json={"group": "モニター"})
+        reordered = client.put(
+            "/api/quick-action-groups/order",
+            json={"groups": ["モニター", "シーン", "空調"]},
+        )
+        removed = client.delete("/api/quick-action-groups/空調")
+
+    assert initial.json() == {"groups": ["シーン", "空調"]}
+    assert added.json() == {"groups": ["シーン", "空調", "モニター"]}
+    assert reordered.json() == {"groups": ["モニター", "シーン", "空調"]}
+    assert removed.json()["moved_buttons"] == 1
+    assert removed.json()["groups"] == ["モニター", "シーン"]
+    assert executor.config.get_button("scene_home").group == "シーン"
 
 
 def test_initial_setup_saves_verified_credentials_and_initializes_app(
@@ -361,3 +488,40 @@ def test_remove_room_refuses_uncategorized_room(tmp_path):
 
     assert response.status_code == 400
     assert "削除できません" in response.json()["detail"]
+
+
+def test_device_exclusion_endpoints_hide_and_restore_without_deleting_preferences(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}],
+                "device_preferences": {
+                    "light-1": {"room": "寝室", "icon": "light", "locked": True}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    app = create_app(
+        executor=FakeExecutor(),
+        status_service=FakeStatusService(),
+        device_preference_service=DevicePreferenceService(config_path),
+    )
+
+    with TestClient(app) as client:
+        before = client.get("/api/device-exclusions")
+        hidden = client.post(
+            "/api/devices/light-1/exclusion",
+            json={"label": "寝室照明"},
+        )
+        restored = client.delete("/api/devices/light-1/exclusion")
+
+    assert before.json() == {"devices": []}
+    assert hidden.json()["devices"] == [
+        {"device_id": "light-1", "label": "寝室照明"}
+    ]
+    assert restored.json()["devices"] == []
+    saved = load_config(config_path)
+    assert saved.device_preferences["light-1"].room == "寝室"
+    assert saved.excluded_devices == {}

@@ -17,7 +17,9 @@ from app.config_sync import (
     ButtonAppearanceUpdate,
     ConfigCandidateList,
     ConfigSyncService,
+    QuickActionGroupOrderUpdate,
     RemoteQuickActionUpdate,
+    SceneSyncUpdate,
 )
 from app.credential_store import (
     CredentialStore,
@@ -241,7 +243,9 @@ def create_app(
     async def config_candidates() -> ConfigCandidateList:
         service = _get_config_sync_service(app)
         try:
-            return await service.refresh()
+            result = await service.refresh()
+            _get_executor(app).replace_config(service.current_config())
+            return result
         except LauncherError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -297,6 +301,39 @@ def create_app(
             )
         try:
             return service.update(device_id, update).model_dump()
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/device-exclusions")
+    async def get_device_exclusions() -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(
+                status_code=500, detail="デバイス設定サービスが初期化されていません。"
+            )
+        return {"devices": service.excluded_devices()}
+
+    @app.post("/api/devices/{device_id}/exclusion")
+    async def exclude_device(device_id: str, payload: dict[str, str]) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(
+                status_code=500, detail="デバイス設定サービスが初期化されていません。"
+            )
+        try:
+            return service.exclude_device(device_id, payload.get("label", ""))
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/devices/{device_id}/exclusion")
+    async def restore_device(device_id: str) -> dict[str, Any]:
+        service = getattr(app.state, "device_preference_service", None)
+        if service is None:
+            raise HTTPException(
+                status_code=500, detail="デバイス設定サービスが初期化されていません。"
+            )
+        try:
+            return service.restore_device(device_id)
         except LauncherError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -380,6 +417,39 @@ def create_app(
         except LauncherError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/api/quick-action-groups")
+    async def get_quick_action_groups() -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        return {"groups": service.quick_action_groups()}
+
+    @app.post("/api/quick-action-groups")
+    async def add_quick_action_group(payload: dict[str, str]) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            return {"groups": service.add_quick_action_group(payload.get("group", ""))}
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/api/quick-action-groups/order")
+    async def reorder_quick_action_groups(
+        update: QuickActionGroupOrderUpdate,
+    ) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            return {"groups": service.reorder_quick_action_groups(update.groups)}
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/quick-action-groups/{group}")
+    async def remove_quick_action_group(group: str) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.remove_quick_action_group(group)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/api/remotes/quick-actions")
     async def save_remote_quick_action(update: RemoteQuickActionUpdate) -> dict[str, Any]:
         service = _get_config_sync_service(app)
@@ -409,6 +479,32 @@ def create_app(
             result = service.update_remote_quick_action(button_id, update)
             _get_executor(app).replace_config(service.current_config())
             return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/config/scenes/{button_id}")
+    async def remove_scene(button_id: str) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            result = service.remove_scene(button_id)
+            _get_executor(app).replace_config(service.current_config())
+            return result
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/api/config/scenes/exclusions/{scene_id}")
+    async def restore_excluded_scene(scene_id: str) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            return service.restore_scene(scene_id)
+        except LauncherError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.put("/api/config/scenes/settings")
+    async def update_scene_sync(update: SceneSyncUpdate) -> dict[str, Any]:
+        service = _get_config_sync_service(app)
+        try:
+            return service.update_scene_sync(update)
         except LauncherError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

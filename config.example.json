@@ -1,4 +1,6 @@
 {
+  "quick_action_groups": ["シーン"],
+  "excluded_devices": {},
   "buttons": [
     {
       "id": "living_light_on",

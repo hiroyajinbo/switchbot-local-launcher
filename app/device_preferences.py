@@ -86,6 +86,37 @@ class DevicePreferenceService:
         self._write(raw)
         return {"removed": room, "moved_devices": moved, "rooms": raw["rooms"]}
 
+    def excluded_devices(self) -> list[dict[str, str]]:
+        config = load_config(self._config_path)
+        return [
+            {"device_id": device_id, "label": label}
+            for device_id, label in config.excluded_devices.items()
+        ]
+
+    def exclude_device(self, device_id: str, label: str) -> dict[str, object]:
+        device_id = device_id.strip()
+        if not device_id:
+            raise LauncherError("非表示にするデバイスIDがありません。")
+        config = load_config(self._config_path)
+        raw = config.model_dump()
+        raw["excluded_devices"][device_id] = label.strip() or device_id
+        self._write(raw)
+        return {"excluded": True, "devices": self.excluded_devices()}
+
+    def restore_device(self, device_id: str) -> dict[str, object]:
+        config = load_config(self._config_path)
+        if device_id not in config.excluded_devices:
+            raise LauncherError("非表示デバイスが見つかりません。")
+        raw = config.model_dump()
+        label = raw["excluded_devices"].pop(device_id)
+        self._write(raw)
+        return {
+            "excluded": False,
+            "device_id": device_id,
+            "label": label,
+            "devices": self.excluded_devices(),
+        }
+
     def add_preset(self, device_id: str, update: LightPresetUpdate) -> LightPreset:
         preset = LightPreset.model_validate(update.model_dump())
         config = load_config(self._config_path)

@@ -224,3 +224,33 @@ def test_includes_and_persists_room_from_device_preference(tmp_path):
     service.reorder_rooms(["旧設定の部屋", "未分類"])
 
     assert json.loads(path.read_text(encoding="utf-8"))["rooms"] == ["旧設定の部屋", "未分類"]
+
+
+def test_excludes_and_restores_device_without_losing_settings(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "buttons": [{"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}],
+                "device_preferences": {
+                    "light-1": {"room": "寝室", "icon": "light", "locked": True}
+                },
+                "light_presets": {"light-1": [{"name": "就寝", "brightness": 20}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = DevicePreferenceService(path)
+
+    excluded = service.exclude_device("light-1", "寝室照明")
+    restored = service.restore_device("light-1")
+    saved = json.loads(path.read_text(encoding="utf-8"))
+
+    assert excluded["devices"] == [{"device_id": "light-1", "label": "寝室照明"}]
+    assert restored["devices"] == []
+    assert saved["device_preferences"]["light-1"] == {
+        "room": "寝室", "icon": "light", "locked": True
+    }
+    assert saved["light_presets"]["light-1"][0]["name"] == "就寝"
+    with pytest.raises(LauncherError, match="見つかりません"):
+        service.restore_device("light-1")

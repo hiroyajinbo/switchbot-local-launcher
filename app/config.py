@@ -84,13 +84,24 @@ class LightPreset(BaseModel):
     color_temperature: int | None = Field(default=None, ge=2700, le=6500)
 
 
+class SceneSyncSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    auto_add: bool = False
+    excluded_scene_ids: list[str] = Field(default_factory=list)
+    excluded_scene_labels: dict[str, str] = Field(default_factory=dict)
+
+
 class LauncherConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    buttons: Annotated[list[Button], Field(min_length=1)]
+    buttons: list[Button]
     device_preferences: dict[str, DevicePreference] = Field(default_factory=dict)
     rooms: list[str] = Field(default_factory=lambda: ["未分類"])
+    quick_action_groups: list[str] = Field(default_factory=list)
+    excluded_devices: dict[str, str] = Field(default_factory=dict)
     light_presets: dict[str, list[LightPreset]] = Field(default_factory=dict)
+    scene_sync: SceneSyncSettings = Field(default_factory=SceneSyncSettings)
 
     def get_button(self, button_id: str) -> Button | None:
         return next((button for button in self.buttons if button.id == button_id), None)
