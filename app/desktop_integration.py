@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -7,6 +8,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from app.data_paths import PORTABLE_DATA_ROOT_ENV
 from app.errors import LauncherError
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -17,20 +19,25 @@ class DesktopIntegration:
     def __init__(
         self,
         log_path: str | Path,
+        config_path: str | Path | None = None,
         *,
         command: str | None = None,
         registry: Any | None = None,
         folder_opener: Callable[[str], Any] | None = None,
     ) -> None:
         self.log_directory = Path(log_path).resolve().parent
+        self.config_path = Path(config_path).resolve() if config_path is not None else None
         self.command = command or desktop_autostart_command()
         self._registry = registry or _winreg()
         self._folder_opener = folder_opener or _open_folder
 
     def status(self) -> dict[str, Any]:
+        storage_mode = "portable" if os.getenv(PORTABLE_DATA_ROOT_ENV, "").strip() else "appdata"
         return {
             "available": sys.platform == "win32",
             "autostart_enabled": self.autostart_enabled(),
+            "storage_mode": storage_mode,
+            "config_path": str(self.config_path) if self.config_path is not None else None,
             "log_directory": str(self.log_directory),
         }
 

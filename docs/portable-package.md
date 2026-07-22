@@ -1,17 +1,18 @@
-# Portable Package
+# SwitchBot Local Launcher ポータブル版
 
-This package is for running SwitchBot Local Launcher on another Windows PC without a
-Python development setup.
+このフォルダは、Python の開発環境を用意せずに Windows PC で起動するための
+ポータブル版です。
 
-## Start
+## 起動方法
 
-Run:
+基本的には `SwitchBotLocalLauncher.exe` を直接起動せず、同じフォルダにある
+`start.cmd` から起動してください。
 
 ```cmd
 start.cmd
 ```
 
-The portable `start.cmd` keeps settings in this folder:
+`start.cmd` から起動した場合、設定とログはこのフォルダ内に保存されます。
 
 ```text
 SwitchBotLocalLauncher-portable\.env
@@ -19,51 +20,58 @@ SwitchBotLocalLauncher-portable\config.json
 SwitchBotLocalLauncher-portable\logs
 ```
 
-This is different from running `SwitchBotLocalLauncher.exe` directly. Direct EXE
-startup uses the normal desktop app data folder:
+`SwitchBotLocalLauncher.exe` を直接起動した場合は通常版扱いになり、保存先は
+Windows のアプリデータフォルダになります。
 
 ```text
 %LOCALAPPDATA%\SwitchBotLocalLauncher
 ```
 
-## First Setup On Another PC
+どちらの保存先を使っているかは、アプリの編集モード内にある PC アプリ欄の
+`Mode` / `Config` / `Log` で確認できます。
 
-If this package only contains templates:
+## 初回セットアップ
 
-1. Copy `.env.example` to `.env`.
-2. Set `SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET` in `.env`.
-3. Copy `config.example.json` to `config.json`.
-4. Edit `config.json` or use the app edit mode after startup.
-5. Run `start.cmd`.
+テンプレートのみのパッケージでは、認証情報と設定ファイルは同梱されません。
+初回起動前に次の準備をしてください。
 
-`start.cmd` stops before launch when `.env` or `config.json` is missing, so the
-portable package does not silently fall back to the normal app-data settings.
+1. `.env.example` をコピーして `.env` を作成します。
+2. `.env` に `SWITCHBOT_TOKEN` と `SWITCHBOT_SECRET` を設定します。
+3. `config.example.json` をコピーして `config.json` を作成します。
+4. `config.json` を編集するか、起動後に編集モードから設定します。
+5. `start.cmd` を実行します。
 
-If the package was created with `--with-local-config`, `.env` and `config.json` are
-already included. Keep that package private because `.env` contains credentials.
+`.env` または `config.json` が無い場合、`start.cmd` はアプリを起動せずに停止します。
+通常版の保存先へ静かに切り替わることはありません。
 
-## Create A Package
+## 設定込みでパッケージを作る場合
 
-From the development project folder:
+開発ディレクトリから次を実行すると、現在の `.env` と `config.json` を含めた
+ポータブルパッケージを作成できます。
+
+```cmd
+package-portable.cmd --with-local-config
+```
+
+`.env` には SwitchBot の認証情報が入るため、このパッケージは公開せず、
+自分の管理できる場所だけで扱ってください。
+
+## パッケージ作成コマンド
+
+テンプレートのみのポータブル版を作る場合:
 
 ```cmd
 package-portable.cmd
 ```
 
-This creates:
+出力先:
 
 ```text
 dist\portable\SwitchBotLocalLauncher-portable
 dist\portable\SwitchBotLocalLauncher-portable.zip
 ```
 
-To include the current local `.env` and `config.json`:
-
-```cmd
-package-portable.cmd --with-local-config
-```
-
-To rebuild from a clean PyInstaller cache:
+PyInstaller の中間生成物も作り直す場合:
 
 ```cmd
 package-portable.cmd --clean

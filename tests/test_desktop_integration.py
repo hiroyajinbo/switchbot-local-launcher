@@ -1,3 +1,4 @@
+from app.data_paths import PORTABLE_DATA_ROOT_ENV
 from app.desktop_integration import RUN_VALUE_NAME, DesktopIntegration
 
 
@@ -52,6 +53,34 @@ def test_autostart_can_be_enabled_and_disabled(tmp_path) -> None:
     assert service.set_autostart(True) is True
     assert registry.values[RUN_VALUE_NAME] == '"C:\\App\\Launcher.exe"'
     assert service.set_autostart(False) is False
+
+
+def test_status_includes_storage_paths(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv(PORTABLE_DATA_ROOT_ENV, raising=False)
+    service = DesktopIntegration(
+        tmp_path / "logs" / "launcher.log",
+        tmp_path / "config.json",
+        command='"C:\\App\\Launcher.exe"',
+        registry=FakeRegistry(),
+    )
+
+    status = service.status()
+
+    assert status["storage_mode"] == "appdata"
+    assert status["config_path"] == str(tmp_path / "config.json")
+    assert status["log_directory"] == str(tmp_path / "logs")
+
+
+def test_status_reports_portable_mode(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv(PORTABLE_DATA_ROOT_ENV, str(tmp_path))
+    service = DesktopIntegration(
+        tmp_path / "logs" / "launcher.log",
+        tmp_path / "config.json",
+        command='"C:\\App\\Launcher.exe"',
+        registry=FakeRegistry(),
+    )
+
+    assert service.status()["storage_mode"] == "portable"
 
 
 def test_open_log_directory_creates_and_opens_folder(tmp_path) -> None:

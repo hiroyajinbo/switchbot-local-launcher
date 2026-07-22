@@ -5,7 +5,9 @@ const candidateList = document.querySelector("#candidateList");
 const configMessage = document.querySelector("#configMessage");
 const deviceStatusList = document.querySelector("#deviceStatusList");
 const desktopAutostart = document.querySelector("#desktopAutostart");
+const desktopConfigPath = document.querySelector("#desktopConfigPath");
 const desktopLogPath = document.querySelector("#desktopLogPath");
+const desktopStorageMode = document.querySelector("#desktopStorageMode");
 const environmentList = document.querySelector("#environmentList");
 const editModeButton = document.querySelector("#editModeButton");
 const historyList = document.querySelector("#historyList");
@@ -1657,10 +1659,14 @@ async function loadDesktopStatus() {
     desktopAutostart.checked = status.autostart_enabled;
     desktopAutostart.disabled = !status.available;
     openLogsButton.disabled = !status.available;
-    desktopLogPath.textContent = `ログ: ${status.log_directory}`;
+    desktopStorageMode.textContent = `Mode: ${status.storage_mode || "appdata"}`;
+    desktopConfigPath.textContent = `Config: ${status.config_path || "-"}`;
+    desktopLogPath.textContent = `Log: ${status.log_directory}`;
   } catch (error) {
     desktopAutostart.disabled = true;
     openLogsButton.disabled = true;
+    desktopStorageMode.textContent = "";
+    desktopConfigPath.textContent = "";
     desktopLogPath.textContent = error.message;
   }
 }

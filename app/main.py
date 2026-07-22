@@ -88,7 +88,10 @@ def create_app(
                 switchbot_client, force_error=loaded_settings.force_control_error
             )
             app.state.device_preference_service = DevicePreferenceService(config_path)
-            app.state.desktop_integration = DesktopIntegration(loaded_settings.log_path)
+            app.state.desktop_integration = DesktopIntegration(
+                loaded_settings.log_path,
+                loaded_settings.config_path,
+            )
             app.state.startup_error = None
         except LauncherError as exc:
             app.state.executor = None
