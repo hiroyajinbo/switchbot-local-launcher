@@ -15,7 +15,7 @@ start.cmd
 `start.cmd` から起動した場合、設定とログはこのフォルダ内に保存されます。
 
 ```text
-SwitchBotLocalLauncher-portable\.env
+SwitchBotLocalLauncher-portable\.env（従来方式を使う場合のみ）
 SwitchBotLocalLauncher-portable\config.json
 SwitchBotLocalLauncher-portable\logs
 ```
@@ -32,22 +32,25 @@ Windows のアプリデータフォルダになります。
 
 ## 初回セットアップ
 
-テンプレートのみのパッケージでは、認証情報と設定ファイルは同梱されません。
-初回起動前に次の準備をしてください。
+テンプレートのみのパッケージには認証情報を同梱しません。
+初回起動は次の手順です。
 
-1. `.env.example` をコピーして `.env` を作成します。
-2. `.env` に `SWITCHBOT_TOKEN` と `SWITCHBOT_SECRET` を設定します。
-3. `config.example.json` をコピーして `config.json` を作成します。
-4. `config.json` を編集するか、起動後に編集モードから設定します。
-5. `start.cmd` を実行します。
+1. `start.cmd` を実行します。
+2. 初回セットアップ画面へOpen TokenとSecret Keyを入力します。
+3. 接続確認後、通常画面が表示されます。
+4. 編集モードから機器・シーンを取得して設定します。
 
-`.env` または `config.json` が無い場合、`start.cmd` はアプリを起動せずに停止します。
-通常版の保存先へ静かに切り替わることはありません。
+`config.json`がない場合、`start.cmd`が`config.example.json`から自動作成します。
+認証情報はWindows資格情報マネージャーへ保存され、ポータブルフォルダやZIPには入りません。
+同じWindowsユーザーで起動する複数の配置先は認証情報だけを共有し、ロック・部屋・表示設定は
+それぞれの`config.json`で独立して管理します。従来どおり`.env`を配置した場合は、そちらを
+優先して利用できます。
 
 ## 設定込みでパッケージを作る場合
 
-開発ディレクトリから次を実行すると、現在の `.env` と `config.json` を含めた
-ポータブルパッケージを作成できます。
+開発ディレクトリから次を実行すると、現在の`config.json`を含めた
+ポータブルパッケージを作成できます。開発ディレクトリに`.env`も存在する場合は、
+互換動作のため`.env`も同梱されます。
 
 ```cmd
 package-portable.cmd --with-local-config

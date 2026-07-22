@@ -9,18 +9,14 @@ if not exist "SwitchBotLocalLauncher.exe" (
   exit /b 1
 )
 
-if not exist ".env" (
-  echo ERROR: .env was not found in this portable folder.
-  echo Copy .env.example to .env and set your SwitchBot credentials.
-  pause
-  exit /b 1
-)
-
 if not exist "config.json" (
-  echo ERROR: config.json was not found in this portable folder.
-  echo Copy config.example.json to config.json or create a package with --with-local-config.
-  pause
-  exit /b 1
+  if not exist "config.example.json" (
+    echo ERROR: config.json and config.example.json were not found in this portable folder.
+    pause
+    exit /b 1
+  )
+  copy /Y "config.example.json" "config.json" >nul
+  if errorlevel 1 exit /b %errorlevel%
 )
 
 set "SWITCHBOT_PORTABLE_DATA_ROOT=%~dp0"

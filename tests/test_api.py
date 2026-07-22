@@ -4,8 +4,11 @@ from fastapi.testclient import TestClient
 
 from app.actions import ActionResult
 from app.config import LauncherConfig
+from app.credential_store import StoredCredentials
 from app.device_preferences import DevicePreferenceService
+from app.errors import SecretConfigError, SwitchBotApiError
 from app.main import create_app
+from app.settings import Settings
 from app.status import DeviceStatusSnapshot
 
 
@@ -94,6 +97,31 @@ class FakeRemoteControlService:
         }
 
 
+class FakeCredentialStore:
+    available = True
+
+    def __init__(self) -> None:
+        self.credentials = None
+
+    def load(self):
+        return self.credentials
+
+    def save(self, credentials) -> None:
+        self.credentials = credentials
+
+
+class FakeSwitchBotClient:
+    should_fail = False
+
+    def __init__(self, credentials) -> None:
+        self.credentials = credentials
+
+    async def get_devices(self):
+        if self.should_fail:
+            raise SwitchBotApiError("invalid credentials")
+        return {"statusCode": 100, "body": {"deviceList": []}}
+
+
 def test_get_buttons():
     app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
 
@@ -145,6 +173,99 @@ def test_index_disables_browser_cache():
     assert response.text.index('class="scene-panel"') < response.text.index(
         'class="device-panel primary-panel"'
     )
+
+
+def test_initial_setup_saves_verified_credentials_and_initializes_app(
+    tmp_path, monkeypatch
+):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {"id": "scene", "label": "Scene", "type": "scene", "scene_id": "1"}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = FakeCredentialStore()
+    bootstrap = Settings(
+        switchbot_token="",
+        switchbot_secret="",
+        config_path=str(config_path),
+        credentials_source="missing",
+    )
+
+    def settings_loader():
+        credentials = store.load()
+        if credentials is None:
+            raise SecretConfigError("初回設定してください。")
+        return Settings(
+            switchbot_token=credentials.token,
+            switchbot_secret=credentials.secret,
+            config_path=str(config_path),
+            credentials_source="windows",
+        )
+
+    FakeSwitchBotClient.should_fail = False
+    monkeypatch.setattr("app.main.SwitchBotClient", FakeSwitchBotClient)
+    app = create_app(
+        settings=bootstrap,
+        settings_loader=settings_loader,
+        credential_store=store,
+    )
+
+    with TestClient(app) as client:
+        before = client.get("/api/setup/status")
+        saved = client.post(
+            "/api/setup/credentials",
+            json={"token": "new-token", "secret": "new-secret"},
+        )
+        health = client.get("/api/health")
+        after = client.get("/api/setup/status")
+
+    assert before.json()["required"] is True
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["source"] == "windows"
+    assert store.credentials == StoredCredentials(token="new-token", secret="new-secret")
+    assert health.json()["ok"] is True
+    assert after.json()["required"] is False
+
+
+def test_initial_setup_does_not_save_invalid_credentials(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"buttons": []}', encoding="utf-8")
+    store = FakeCredentialStore()
+    bootstrap = Settings(
+        switchbot_token="",
+        switchbot_secret="",
+        config_path=str(config_path),
+        credentials_source="missing",
+    )
+
+    def settings_loader():
+        raise SecretConfigError("初回設定してください。")
+
+    FakeSwitchBotClient.should_fail = True
+    monkeypatch.setattr("app.main.SwitchBotClient", FakeSwitchBotClient)
+    app = create_app(
+        settings=bootstrap,
+        settings_loader=settings_loader,
+        credential_store=store,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/setup/credentials",
+            json={"token": "wrong", "secret": "wrong"},
+        )
+        status = client.get("/api/setup/status")
+
+    assert response.status_code == 400
+    assert "認証を確認できませんでした" in response.json()["detail"]
+    assert store.credentials is None
+    assert status.json()["required"] is True
 
 
 def test_execute_action():

@@ -3,6 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 set "INCLUDE_LOCAL_CONFIG="
+set "INCLUDED_ENV="
 set "CLEAN_OPTION="
 
 :parse_args
@@ -53,18 +54,17 @@ copy /Y "docs\portable-package.md" "%PACKAGE_DIR%\README_PORTABLE.md" >nul
 if errorlevel 1 exit /b %errorlevel%
 
 if defined INCLUDE_LOCAL_CONFIG (
-  if not exist ".env" (
-    echo ERROR: --with-local-config was specified, but .env was not found.
-    exit /b 1
-  )
   if not exist "config.json" (
     echo ERROR: --with-local-config was specified, but config.json was not found.
     exit /b 1
   )
-  copy /Y ".env" "%PACKAGE_DIR%\.env" >nul
-  if errorlevel 1 exit /b %errorlevel%
   copy /Y "config.json" "%PACKAGE_DIR%\config.json" >nul
   if errorlevel 1 exit /b %errorlevel%
+  if exist ".env" (
+    copy /Y ".env" "%PACKAGE_DIR%\.env" >nul
+    if errorlevel 1 exit /b %errorlevel%
+    set "INCLUDED_ENV=1"
+  )
 )
 
 if exist "%ZIP_PATH%" del /q "%ZIP_PATH%"
@@ -77,13 +77,13 @@ echo.
 echo Portable package complete:
 echo   Folder: %PACKAGE_DIR%
 echo   Zip:    %ZIP_PATH%
-if defined INCLUDE_LOCAL_CONFIG (
+if defined INCLUDED_ENV (
   echo.
   echo WARNING: This package includes .env and config.json.
   echo Keep it private because it contains SwitchBot credentials.
 ) else (
   echo.
-  echo NOTE: This package includes templates only.
-  echo Copy .env.example to .env and config.example.json to config.json on the target PC.
+  echo NOTE: SwitchBot credentials are not included.
+  echo Enter them in the initial setup screen on the target PC.
 )
 endlocal

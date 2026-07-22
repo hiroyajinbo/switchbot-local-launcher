@@ -135,7 +135,8 @@ h1 {
 .device-panel,
 .history-panel,
 .config-panel,
-.result {
+.result,
+.credential-setup {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -674,6 +675,108 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
   color: var(--danger);
   cursor: pointer;
 }
+
+.credential-setup {
+  max-width: 680px;
+  margin: 72px auto 0;
+  padding: 28px;
+  box-shadow: 0 18px 50px var(--shadow);
+}
+
+.setup-heading {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.setup-heading h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+.setup-heading p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.setup-heading .setup-eyebrow {
+  margin-bottom: 4px;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.setup-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--success-bg);
+  font-size: 25px;
+}
+
+.credential-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.credential-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.credential-form input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.credential-form input:focus {
+  border-color: var(--accent);
+  outline: 3px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.credential-form .apply-button {
+  min-height: 46px;
+  margin-top: 4px;
+}
+
+.setup-message {
+  min-height: 24px;
+  margin: 14px 0 0;
+  color: var(--muted);
+}
+
+.setup-message.error {
+  color: var(--danger);
+}
+
+.setup-note {
+  margin: 14px 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+body.setup-required .shell > section:not(.credential-setup),
+body.setup-required .shell > details,
+body.setup-required #editModeButton {
+  display: none;
+}
 .remote-quick-edit {
   border-color: var(--accent);
   color: var(--accent);
@@ -912,4 +1015,6 @@ body:not(.edit-mode) .preset-chip > .mini-button:first-child { border-radius: 99
   .room-device-grid { grid-template-columns: 1fr; }
   .header-actions { align-items: stretch; flex-direction: column-reverse; }
   .desktop-settings { grid-template-columns: 1fr; align-items: stretch; }
+  .credential-setup { margin-top: 32px; padding: 22px; }
+  .setup-heading { grid-template-columns: 1fr; }
 }

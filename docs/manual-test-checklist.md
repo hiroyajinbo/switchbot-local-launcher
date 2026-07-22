@@ -4,10 +4,6 @@
 
 - [〇] PowerShellの実行ポリシーを変更せず `start.cmd` で起動できる
 - [〇] 必須ファイルがない場合に `start.cmd` が分かりやすいエラーを表示する
-.envをリネームして事項で以下
-PS C:\Users\elega\Documents\CD開発フロー\projects\ローカル自動化ミニアプリ> .\start.cmd
-ERROR: .env was not found. Copy .env.example and set your credentials.
-PS C:\Users\elega\Documents\CD開発フロー\projects\ローカル自動化ミニアプリ>
 - [〇] `.env` と `config.json` を作成した状態で `.\.venv\Scripts\python.exe -m app` で起動できる
 グローバルPythonの `python -m app` は仮想環境の依存関係を参照しないため、テスト対象を仮想環境Pythonへ修正。
 PS C:\Users\elega\Documents\CD開発フロー\projects\ローカル自動化ミニアプリ> python -m app
@@ -21,7 +17,15 @@ Traceback (most recent call last):
 ModuleNotFoundError: No module named 'uvicorn'
 PS C:\Users\elega\Documents\CD開発フロー\projects\ローカル自動化ミニアプリ>
 - [〇] `http://127.0.0.1:8765` をブラウザで開ける
-- [〇] `.env` 未設定時に分かりやすいエラーが表示される
+- [〇] `.env`と保存済み認証情報がない初回起動で入力画面が表示される
+- [ ] 誤ったOpen TokenまたはSecret Keyは保存されず、入力画面にエラーが表示される
+- [〇] 正しい認証情報を保存すると通常画面へ切り替わる
+- [〇] 再起動後も入力不要でWindows資格情報から接続できる
+- [ ] 初回設定後もポータブルフォルダとZIPにToken・Secretが生成されない
+
+2026-07-22、Downloadsへ新規展開したポータブル版で初回入力画面を確認。
+正しいOpen TokenとSecret Keyの保存後、そのまま通常画面へ切り替わり、デバイス情報を取得できることを確認。
+アプリを閉じて同じ`start.cmd`から再起動し、認証情報の再入力なしで通常画面が表示されることを確認。
 
 ## 操作
 

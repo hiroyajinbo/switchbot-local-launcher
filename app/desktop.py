@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from app.credential_store import WindowsCredentialStore
 from app.data_paths import load_desktop_settings, prepare_desktop_data
 from app.errors import LauncherError
 from app.main import create_app
@@ -46,9 +47,21 @@ def _run_desktop_window(
     webview_module: WebviewProtocol | None,
     server_factory: type[ManagedServer],
 ) -> None:
+    settings_loader = None
+    credential_store = WindowsCredentialStore()
     if settings is None:
         try:
-            settings = load_desktop_settings(prepare_desktop_data())
+            paths = prepare_desktop_data()
+            settings = load_desktop_settings(
+                paths,
+                credential_store=credential_store,
+                allow_missing_credentials=True,
+            )
+            def settings_loader() -> Settings:
+                return load_desktop_settings(
+                    paths,
+                    credential_store=credential_store,
+                )
         except LauncherError as exc:
             print(f"ERROR: {exc}")
             raise SystemExit(1) from None
@@ -66,7 +79,11 @@ def _run_desktop_window(
 
     log_config = configure_rotating_logging(settings.log_path)
     server = server_factory(
-        create_app(settings=settings),
+        create_app(
+            settings=settings,
+            settings_loader=settings_loader,
+            credential_store=credential_store,
+        ),
         settings.host,
         settings.port,
         log_config=log_config,

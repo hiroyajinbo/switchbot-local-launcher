@@ -18,11 +18,18 @@ Windows PC上で起動し、ブラウザからSwitchBot機器やシーンを操�
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
-Copy-Item .env.example .env
 Copy-Item config.example.json config.json
 ```
 
-`.env` にSwitchBotアプリで取得したOpen TokenとSecret Keyを設定します。
+認証情報は、初回起動時の画面でSwitchBotアプリから取得したOpen TokenとSecret Keyを
+入力します。接続確認後、現在のWindowsユーザーの「資格情報マネージャー」へ保存されます。
+`.env` を使う従来方式も互換性のため利用でき、その場合は画面保存より優先されます。
+
+`.env`方式を利用する場合だけ、次を実行して認証情報を記入します。
+
+```powershell
+Copy-Item .env.example .env
+```
 
 ```text
 SWITCHBOT_TOKEN=xxxx
@@ -31,7 +38,8 @@ SWITCHBOT_CONFIG_PATH=config.json
 SWITCHBOT_LOG_PATH=logs/switchbot-local-launcher.log
 ```
 
-`config.json` に表示したいボタンを定義します。`.env` と `config.json` はGit管理しません。
+`.env` を利用しない場合、作成は省略できます。`config.json` に表示したいボタンを定義します。
+`.env` と `config.json` はGit管理しません。
 
 各ボタンには省略可能な `group` を指定できます。画面では同じグループのボタンがまとまって表示され、省略時は「その他」になります。実行結果は直近5件まで新しい順に表示されます。
 
@@ -45,7 +53,8 @@ SWITCHBOT_LOG_PATH=logs/switchbot-local-launcher.log
 python -m app
 ```
 
-日常利用では、PowerShellの実行ポリシーに影響されない次のコマンドを推奨します。`.venv`、`.env`、`config.json` が不足している場合は、その内容を表示して停止します。
+日常利用では、PowerShellの実行ポリシーに影響されない次のコマンドを推奨します。
+`.venv`または`config.json`が不足している場合は、その内容を表示して停止します。
 
 ```powershell
 .\start.cmd
@@ -62,7 +71,11 @@ MVP3のPCアプリウィンドウを開く場合は、デスクトップ依存�
 
 ウィンドウを閉じると、内蔵ローカルサーバーも停止します。起動中にもう一度 `desktop.cmd` を実行した場合は新しいサーバーを作らず、既存ウィンドウを前面へ表示します。従来どおりブラウザで利用する場合は `start.cmd` を使用できます。
 
-PCアプリの初回起動時は、プロジェクト直下の `.env` と `config.json` を `%LOCALAPPDATA%\SwitchBotLocalLauncher` へコピーします。元ファイルは削除せず、コピー先に既存ファイルがある場合も上書きしません。以後、PCアプリはコピー先の設定とログを使用します。ブラウザ版は従来どおりプロジェクト直下のファイルを使用します。
+PCアプリの初回起動時は、プロジェクト直下に存在する`.env`と`config.json`を
+`%LOCALAPPDATA%\SwitchBotLocalLauncher`へコピーします。`.env`がなくても起動でき、
+初回画面で保存した認証情報はWindows資格情報マネージャーから読み込みます。
+元ファイルは削除せず、コピー先に既存ファイルがある場合も上書きしません。
+以後、PCアプリはコピー先の設定とログを使用します。
 
 Windows GUIの基本動作は、次のスモークテストで自動確認できます。PCアプリを起動してウィンドウとヘルスAPIを検出し、自動で閉じた後にプロセスと8765番ポートが解放されたことを確認します。
 

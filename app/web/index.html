@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SwitchBot Local Launcher</title>
-    <link rel="stylesheet" href="/static/style.css?v=mvp3-ac-only-1" />
+    <link rel="stylesheet" href="/static/style.css?v=mvp3-credentials-1" />
   </head>
   <body>
     <main class="shell">
@@ -16,6 +16,49 @@
           <div id="statusBadge" class="status-badge">起動確認中</div>
         </div>
       </header>
+
+      <section id="credentialSetup" class="credential-setup" hidden>
+        <div class="setup-heading">
+          <div class="setup-mark" aria-hidden="true">🔐</div>
+          <div>
+            <p class="setup-eyebrow">初回セットアップ</p>
+            <h2>SwitchBot APIを接続</h2>
+            <p>
+              SwitchBotアプリで発行したOpen TokenとSecret Keyを入力してください。
+              入力内容は確認後、Windows資格情報へ安全に保存します。
+            </p>
+          </div>
+        </div>
+        <form id="credentialForm" class="credential-form">
+          <label>
+            <span>Open Token</span>
+            <input
+              id="credentialToken"
+              name="token"
+              type="password"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <label>
+            <span>Secret Key</span>
+            <input
+              id="credentialSecret"
+              name="secret"
+              type="password"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <button id="credentialSaveButton" class="apply-button" type="submit">
+            接続を確認して保存
+          </button>
+        </form>
+        <p id="credentialMessage" class="setup-message" aria-live="polite"></p>
+        <p class="setup-note">
+          この情報はconfig.jsonやポータブルZIPには保存されません。従来の.env設定も引き続き利用できます。
+        </p>
+      </section>
 
       <section class="status-panel" aria-label="状態">
         <div class="section-heading">
@@ -99,6 +142,6 @@
     </main>
     <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=mvp3-ac-only-1"></script>
+    <script src="/static/app.js?v=mvp3-credentials-1"></script>
   </body>
 </html>

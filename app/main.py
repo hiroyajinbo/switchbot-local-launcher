@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from app.actions import ActionExecutor, ActionResult
 from app.config import RemoteCommandButton, load_config
@@ -18,6 +19,11 @@ from app.config_sync import (
     ConfigSyncService,
     RemoteQuickActionUpdate,
 )
+from app.credential_store import (
+    CredentialStore,
+    StoredCredentials,
+    WindowsCredentialStore,
+)
 from app.desktop_integration import DesktopIntegration
 from app.device_control import DeviceControlRequest, DeviceControlResult, DeviceControlService
 from app.device_preferences import (
@@ -26,7 +32,7 @@ from app.device_preferences import (
     LightPresetUpdate,
     RoomOrderUpdate,
 )
-from app.errors import ActionNotFoundError, LauncherError
+from app.errors import ActionNotFoundError, LauncherError, SecretConfigError
 from app.remote_control import (
     AirConditionerControlRequest,
     RemoteControlResult,
@@ -38,6 +44,12 @@ from app.status import DeviceStatusService, DeviceStatusSnapshot
 from app.switchbot_client import SwitchBotClient, SwitchBotCredentials
 
 WEB_DIR = Path(__file__).parent / "web"
+SettingsLoader = Callable[[], Settings]
+
+
+class CredentialSetupRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=1024)
+    secret: str = Field(min_length=1, max_length=1024)
 
 
 def create_app(
@@ -50,13 +62,30 @@ def create_app(
     device_preference_service: DevicePreferenceService | None = None,
     desktop_integration: DesktopIntegration | None = None,
     remote_control_service: RemoteControlService | None = None,
+    credential_store: CredentialStore | None = None,
+    settings_loader: SettingsLoader | None = None,
 ) -> FastAPI:
+    store = credential_store or WindowsCredentialStore()
+
+    def load_runtime_settings() -> Settings:
+        if settings_loader is not None:
+            return settings_loader()
+        if settings is not None and settings.switchbot_token and settings.switchbot_secret:
+            return settings
+        return load_settings(credential_store=store)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.credential_store = store
+        app.state.settings_loader = load_runtime_settings
         if executor is not None or status_service is not None or startup_error is not None:
             app.state.executor = executor
             app.state.status_service = status_service
             app.state.startup_error = startup_error
+            app.state.setup_required = isinstance(startup_error, SecretConfigError)
+            app.state.credentials_source = (
+                settings.credentials_source if settings is not None else "missing"
+            )
             app.state.config_sync_service = config_sync_service
             app.state.device_control_service = device_control_service
             app.state.device_preference_service = device_preference_service
@@ -66,37 +95,18 @@ def create_app(
             return
 
         try:
-            loaded_settings = settings or load_settings()
-            config = load_config(loaded_settings.config_path)
-            credentials = SwitchBotCredentials(
-                token=loaded_settings.switchbot_token,
-                secret=loaded_settings.switchbot_secret,
+            _initialize_services(
+                app,
+                load_runtime_settings(),
+                desktop_integration=desktop_integration,
             )
-            switchbot_client = SwitchBotClient(credentials)
-            app.state.executor = ActionExecutor(config, switchbot_client)
-            app.state.config_sync_service = ConfigSyncService(
-                Path(loaded_settings.config_path), switchbot_client
-            )
-            config_path = Path(loaded_settings.config_path)
-            app.state.status_service = DeviceStatusService(switchbot_client, config_path)
-            app.state.device_control_service = DeviceControlService(
-                switchbot_client,
-                config_path,
-                force_error=loaded_settings.force_control_error,
-            )
-            app.state.remote_control_service = RemoteControlService(
-                switchbot_client, force_error=loaded_settings.force_control_error
-            )
-            app.state.device_preference_service = DevicePreferenceService(config_path)
-            app.state.desktop_integration = DesktopIntegration(
-                loaded_settings.log_path,
-                loaded_settings.config_path,
-            )
-            app.state.startup_error = None
         except LauncherError as exc:
-            app.state.executor = None
-            app.state.status_service = None
-            app.state.startup_error = exc
+            _set_startup_failure(
+                app,
+                exc,
+                fallback_settings=settings,
+                desktop_integration=desktop_integration,
+            )
         yield
 
     app = FastAPI(title="SwitchBot Local Launcher", lifespan=lifespan)
@@ -117,6 +127,70 @@ def create_app(
     async def health() -> dict[str, Any]:
         error = getattr(app.state, "startup_error", None)
         return {"ok": error is None, "error": str(error) if error else None}
+
+    @app.get("/api/setup/status")
+    async def setup_status() -> dict[str, Any]:
+        return {
+            "required": bool(getattr(app.state, "setup_required", False)),
+            "storage_available": bool(store.available),
+            "storage": "Windows Credential Manager" if store.available else None,
+            "source": getattr(app.state, "credentials_source", "missing"),
+        }
+
+    @app.post("/api/setup/credentials")
+    async def save_credentials(request: CredentialSetupRequest) -> dict[str, Any]:
+        if not getattr(app.state, "setup_required", False):
+            raise HTTPException(status_code=409, detail="認証情報は既に設定されています。")
+        if not store.available:
+            raise HTTPException(
+                status_code=400,
+                detail="この環境ではWindows資格情報を利用できません。.envを使用してください。",
+            )
+
+        credentials = StoredCredentials(
+            token=request.token.strip(),
+            secret=request.secret.strip(),
+        )
+        if not credentials.token or not credentials.secret:
+            raise HTTPException(
+                status_code=400,
+                detail="Open TokenとSecret Keyを両方入力してください。",
+            )
+
+        try:
+            await SwitchBotClient(
+                SwitchBotCredentials(
+                    token=credentials.token,
+                    secret=credentials.secret,
+                )
+            ).get_devices()
+        except LauncherError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"認証を確認できませんでした: {exc}",
+            ) from exc
+
+        try:
+            store.save(credentials)
+            _initialize_services(
+                app,
+                load_runtime_settings(),
+                desktop_integration=getattr(app.state, "desktop_integration", None),
+            )
+        except LauncherError as exc:
+            _set_startup_failure(
+                app,
+                exc,
+                fallback_settings=settings,
+                desktop_integration=getattr(app.state, "desktop_integration", None),
+            )
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        return {
+            "ready": True,
+            "storage": "Windows Credential Manager",
+            "source": getattr(app.state, "credentials_source", "windows"),
+        }
 
     @app.get("/api/buttons")
     async def buttons() -> dict[str, Any]:
@@ -372,6 +446,68 @@ def create_app(
     return app
 
 
+def _initialize_services(
+    app: FastAPI,
+    loaded_settings: Settings,
+    *,
+    desktop_integration: DesktopIntegration | None = None,
+) -> None:
+    if not loaded_settings.switchbot_token or not loaded_settings.switchbot_secret:
+        raise SecretConfigError("SwitchBotのOpen TokenとSecret Keyを初回設定してください。")
+
+    config = load_config(loaded_settings.config_path)
+    credentials = SwitchBotCredentials(
+        token=loaded_settings.switchbot_token,
+        secret=loaded_settings.switchbot_secret,
+    )
+    switchbot_client = SwitchBotClient(credentials)
+    config_path = Path(loaded_settings.config_path)
+    app.state.executor = ActionExecutor(config, switchbot_client)
+    app.state.config_sync_service = ConfigSyncService(config_path, switchbot_client)
+    app.state.status_service = DeviceStatusService(switchbot_client, config_path)
+    app.state.device_control_service = DeviceControlService(
+        switchbot_client,
+        config_path,
+        force_error=loaded_settings.force_control_error,
+    )
+    app.state.remote_control_service = RemoteControlService(
+        switchbot_client,
+        force_error=loaded_settings.force_control_error,
+    )
+    app.state.device_preference_service = DevicePreferenceService(config_path)
+    app.state.desktop_integration = desktop_integration or DesktopIntegration(
+        loaded_settings.log_path,
+        loaded_settings.config_path,
+    )
+    app.state.startup_error = None
+    app.state.setup_required = False
+    app.state.credentials_source = loaded_settings.credentials_source
+
+
+def _set_startup_failure(
+    app: FastAPI,
+    error: LauncherError,
+    *,
+    fallback_settings: Settings | None,
+    desktop_integration: DesktopIntegration | None,
+) -> None:
+    app.state.executor = None
+    app.state.status_service = None
+    app.state.config_sync_service = None
+    app.state.device_control_service = None
+    app.state.device_preference_service = None
+    app.state.remote_control_service = None
+    app.state.startup_error = error
+    app.state.setup_required = isinstance(error, SecretConfigError)
+    app.state.credentials_source = "missing" if app.state.setup_required else "unknown"
+    app.state.desktop_integration = desktop_integration
+    if app.state.desktop_integration is None and fallback_settings is not None:
+        app.state.desktop_integration = DesktopIntegration(
+            fallback_settings.log_path,
+            fallback_settings.config_path,
+        )
+
+
 def _get_executor(app: FastAPI) -> ActionExecutor:
     startup_error = getattr(app.state, "startup_error", None)
     if startup_error is not None:
@@ -427,7 +563,7 @@ app = create_app()
 
 def run() -> None:
     try:
-        settings = load_settings()
+        settings = load_settings(allow_missing_credentials=True)
     except LauncherError:
         settings = Settings(switchbot_token="", switchbot_secret="")
     log_config = configure_rotating_logging(settings.log_path)

@@ -49,6 +49,18 @@ def test_prepare_desktop_data_reports_missing_files(tmp_path) -> None:
         prepare_desktop_data(tmp_path / "empty", paths=AppDataPaths(tmp_path / "local"))
 
 
+def test_prepare_desktop_data_allows_missing_env(tmp_path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "config.json").write_text('{"buttons": []}', encoding="utf-8")
+    paths = AppDataPaths(tmp_path / "local")
+
+    prepare_desktop_data(source, paths=paths)
+
+    assert not paths.env.exists()
+    assert paths.config.exists()
+
+
 def test_desktop_settings_resolve_relative_paths_inside_data_root(tmp_path, monkeypatch) -> None:
     paths = AppDataPaths(tmp_path / "local")
     paths.root.mkdir()
