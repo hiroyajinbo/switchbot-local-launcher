@@ -83,6 +83,20 @@ def test_status_reports_portable_mode(tmp_path, monkeypatch) -> None:
     assert service.status()["storage_mode"] == "portable"
 
 
+def test_non_windows_status_does_not_require_registry(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("app.desktop_integration.sys.platform", "linux")
+    service = DesktopIntegration(
+        tmp_path / "logs" / "launcher.log",
+        tmp_path / "config.json",
+        command="launcher",
+    )
+
+    status = service.status()
+
+    assert status["available"] is False
+    assert status["autostart_enabled"] is False
+
+
 def test_open_log_directory_creates_and_opens_folder(tmp_path) -> None:
     opened = []
     service = DesktopIntegration(

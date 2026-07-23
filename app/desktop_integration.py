@@ -28,51 +28,54 @@ class DesktopIntegration:
         self.log_directory = Path(log_path).resolve().parent
         self.config_path = Path(config_path).resolve() if config_path is not None else None
         self.command = command or desktop_autostart_command()
-        self._registry = registry or _winreg()
+        self._registry = registry
         self._folder_opener = folder_opener or _open_folder
 
     def status(self) -> dict[str, Any]:
         storage_mode = "portable" if os.getenv(PORTABLE_DATA_ROOT_ENV, "").strip() else "appdata"
+        available = sys.platform == "win32"
         return {
-            "available": sys.platform == "win32",
-            "autostart_enabled": self.autostart_enabled(),
+            "available": available,
+            "autostart_enabled": self.autostart_enabled() if available else False,
             "storage_mode": storage_mode,
             "config_path": str(self.config_path) if self.config_path is not None else None,
             "log_directory": str(self.log_directory),
         }
 
     def autostart_enabled(self) -> bool:
+        registry = self._registry or _winreg()
         try:
-            with self._registry.OpenKey(
-                self._registry.HKEY_CURRENT_USER,
+            with registry.OpenKey(
+                registry.HKEY_CURRENT_USER,
                 RUN_KEY,
                 0,
-                self._registry.KEY_READ,
+                registry.KEY_READ,
             ) as key:
-                value, _value_type = self._registry.QueryValueEx(key, RUN_VALUE_NAME)
+                value, _value_type = registry.QueryValueEx(key, RUN_VALUE_NAME)
         except FileNotFoundError:
             return False
         return value == self.command
 
     def set_autostart(self, enabled: bool) -> bool:
+        registry = self._registry or _winreg()
         try:
-            with self._registry.CreateKeyEx(
-                self._registry.HKEY_CURRENT_USER,
+            with registry.CreateKeyEx(
+                registry.HKEY_CURRENT_USER,
                 RUN_KEY,
                 0,
-                self._registry.KEY_SET_VALUE,
+                registry.KEY_SET_VALUE,
             ) as key:
                 if enabled:
-                    self._registry.SetValueEx(
+                    registry.SetValueEx(
                         key,
                         RUN_VALUE_NAME,
                         0,
-                        self._registry.REG_SZ,
+                        registry.REG_SZ,
                         self.command,
                     )
                 else:
                     with suppress(FileNotFoundError):
-                        self._registry.DeleteValue(key, RUN_VALUE_NAME)
+                        registry.DeleteValue(key, RUN_VALUE_NAME)
         except OSError as exc:
             raise LauncherError(f"Windows自動起動設定を更新できませんでした: {exc}") from exc
         return self.autostart_enabled()
