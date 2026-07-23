@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+from collections.abc import Callable
 from types import TracebackType
 from typing import Any, Protocol
 
@@ -25,11 +26,11 @@ class SingleInstance:
         name: str = MUTEX_NAME,
         *,
         kernel32: Kernel32Protocol | None = None,
-        get_last_error=ctypes.get_last_error,
+        get_last_error: Callable[[], int] | None = None,
     ) -> None:
         self.name = name
         self._kernel32 = kernel32
-        self._get_last_error = get_last_error
+        self._get_last_error = get_last_error or _get_last_error
         self._handle: int | None = None
         self.acquired = False
 
@@ -63,6 +64,11 @@ class SingleInstance:
         _traceback: TracebackType | None,
     ) -> None:
         self.close()
+
+
+def _get_last_error() -> int:
+    reader = getattr(ctypes, "get_last_error", None)
+    return int(reader()) if reader is not None else 0
 
 
 def _load_kernel32() -> Kernel32Protocol:
