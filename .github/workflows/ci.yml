@@ -18,3 +18,18 @@ jobs:
         run: python -m ruff check .
       - name: Test
         run: python -m pytest
+
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Create desktop environment
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -e ".[desktop]"
+      - name: Build and verify portable package
+        run: .\package-portable.cmd --clean

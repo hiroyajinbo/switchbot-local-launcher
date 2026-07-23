@@ -25,12 +25,14 @@ def test_build_config_from_resources_converts_scenes_only():
             {
                 "id": "scene_leaving_home",
                 "label": "Leaving Home",
+                "group": "シーン",
                 "type": "scene",
                 "scene_id": "scene-1",
             },
             {
                 "id": "scene_002",
                 "label": "お風呂",
+                "group": "シーン",
                 "type": "scene",
                 "scene_id": "scene-2",
             },

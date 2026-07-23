@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SwitchBot クイック操作</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>SwitchBot</h1>
+        <p>クイック操作</p>
+      </div>
+      <button id="refreshButton" class="icon-button" type="button" title="再読み込み">↻</button>
+    </header>
+
+    <main id="quickActions" aria-live="polite">
+      <p class="message">PCアプリを確認しています…</p>
+    </main>
+
+    <footer>
+      <p id="statusMessage">接続確認中</p>
+      <button id="openAppButton" class="text-button" type="button">PCアプリ画面を開く</button>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

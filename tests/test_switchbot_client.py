@@ -68,3 +68,26 @@ async def test_get_devices_uses_devices_endpoint():
     assert result["body"] == {"deviceList": []}
     assert requests[0].method == "GET"
     assert requests[0].url.path == "/v1.1/devices"
+
+
+@pytest.mark.asyncio
+async def test_get_device_status_uses_status_endpoint():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"statusCode": 100, "body": {"power": "on"}})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = SwitchBotClient(
+            SwitchBotCredentials(token="token", secret="secret"),
+            http_client=http_client,
+            base_url="https://example.test/v1.1",
+        )
+
+        result = await client.get_device_status("device-1")
+
+    assert result["body"] == {"power": "on"}
+    assert requests[0].method == "GET"
+    assert requests[0].url.path == "/v1.1/devices/device-1/status"

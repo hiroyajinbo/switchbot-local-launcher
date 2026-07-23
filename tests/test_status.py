@@ -1,0 +1,121 @@
+import json
+
+import pytest
+
+from app.errors import SwitchBotApiError
+from app.status import DeviceStatusService
+
+
+class FakeSwitchBotClient:
+    async def get_devices(self):
+        return {
+            "statusCode": 100,
+            "body": {
+                "deviceList": [
+                    {"deviceId": "hub-1", "deviceName": "Hub 2", "deviceType": "Hub 2"},
+                    {"deviceId": "light-1", "deviceName": "Light", "deviceType": "Color Bulb"},
+                ],
+                "infraredRemoteList": [
+                    {
+                        "deviceId": "remote-1",
+                        "deviceName": "Air Conditioner",
+                        "remoteType": "Air Conditioner",
+                        "hubDeviceId": "hub-1",
+                    }
+                ],
+            },
+        }
+
+    async def get_device_status(self, device_id):
+        if device_id == "hub-1":
+            return {
+                "statusCode": 100,
+                "body": {
+                    "deviceId": device_id,
+                    "deviceType": "Hub 2",
+                    "temperature": 31.4,
+                    "humidity": 58,
+                    "lightLevel": 5,
+                },
+            }
+        return {
+            "statusCode": 100,
+            "body": {
+                "deviceId": device_id,
+                "deviceType": "Color Bulb",
+                "power": "on",
+                "brightness": 50,
+            },
+        }
+
+
+@pytest.mark.asyncio
+async def test_status_snapshot_splits_environment_and_devices():
+    service = DeviceStatusService(FakeSwitchBotClient())
+
+    snapshot = await service.snapshot()
+
+    assert snapshot.environment[0]["label"] == "Hub 2"
+    assert snapshot.environment[0]["summary"] == "31.4 C / 58% / light 5"
+    assert snapshot.devices[0]["label"] == "Light"
+    assert snapshot.devices[0]["summary"] == "power on"
+    assert snapshot.devices[0]["controls"] == {
+        "power": True,
+        "brightness": True,
+        "press": False,
+        "color": True,
+        "color_temperature": True,
+    }
+    assert snapshot.remotes[0]["label"] == "Air Conditioner"
+    assert snapshot.remotes[0]["summary"].startswith("実状態は取得できません")
+    assert snapshot.remotes[0]["controls"] == {"air_conditioner": True}
+
+
+@pytest.mark.asyncio
+async def test_status_snapshot_keeps_last_device_state_on_temporary_error():
+    client = FakeSwitchBotClient()
+    service = DeviceStatusService(client)
+    await service.snapshot()
+    original_get_status = client.get_device_status
+
+    async def fail_light(device_id):
+        if device_id == "light-1":
+            raise SwitchBotApiError("temporary error")
+        return await original_get_status(device_id)
+
+    client.get_device_status = fail_light
+    snapshot = await service.snapshot()
+
+    assert snapshot.devices[0]["device_id"] == "light-1"
+    assert snapshot.devices[0]["summary"] == "power on"
+    assert snapshot.devices[0]["stale"] is True
+    assert snapshot.devices[0]["status_error"] == "temporary error"
+    assert snapshot.errors[0]["device_id"] == "light-1"
+
+
+@pytest.mark.asyncio
+async def test_status_snapshot_skips_excluded_devices(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [],
+                "excluded_devices": {"light-1": "Light"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    client = FakeSwitchBotClient()
+    original_get_status = client.get_device_status
+    requested_ids = []
+
+    async def track_status_request(device_id):
+        requested_ids.append(device_id)
+        return await original_get_status(device_id)
+
+    client.get_device_status = track_status_request
+    snapshot = await DeviceStatusService(client, config_path).snapshot()
+
+    assert [item["device_id"] for item in snapshot.environment] == ["hub-1"]
+    assert snapshot.devices == []
+    assert requested_ids == ["hub-1"]

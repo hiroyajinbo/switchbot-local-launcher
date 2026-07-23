@@ -5,8 +5,11 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+logs/
 
 .env
 config.json
 switchbot.resources.json
 config.generated.json
+config.device-buttons.generated.json
+switchbot.inspection.json

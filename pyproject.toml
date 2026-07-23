@@ -1,6 +1,6 @@
 [project]
 name = "switchbot-local-launcher"
-version = "0.1.0"
+version = "0.3.0"
 description = "Local browser launcher for SwitchBot devices and scenes."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,6 +18,15 @@ dev = [
   "pytest-asyncio>=0.23.0",
   "ruff>=0.5.0",
 ]
+desktop = [
+  "pywebview>=6.1",
+  "pyinstaller>=6.0",
+  "pywinauto>=0.6.9",
+]
+
+[project.scripts]
+switchbot-local-launcher = "app.main:run"
+switchbot-local-launcher-desktop = "app.desktop:run"
 
 [tool.ruff]
 line-length = 100
@@ -29,3 +38,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["web/*"]

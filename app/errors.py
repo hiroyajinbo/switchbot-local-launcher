@@ -12,7 +12,11 @@ class ConfigError(LauncherError):
 
 
 class SecretConfigError(LauncherError):
-    user_message = ".env のSwitchBot認証情報が未設定です。"
+    user_message = "SwitchBot認証情報が未設定です。"
+
+
+class CredentialStoreError(LauncherError):
+    user_message = "SwitchBot認証情報を安全に保存できませんでした。"
 
 
 class SwitchBotApiError(LauncherError):

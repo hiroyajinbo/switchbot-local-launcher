@@ -4,24 +4,201 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SwitchBot Local Launcher</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <script>
+      try {
+        const savedTheme = localStorage.getItem("switchbot-theme");
+        if (savedTheme === "dark" || savedTheme === "light") {
+          document.documentElement.dataset.theme = savedTheme;
+        }
+      } catch {
+        // Storage may be unavailable in a restricted browser context.
+      }
+    </script>
+    <link rel="stylesheet" href="/static/style.css?v=0.3.0" />
   </head>
   <body>
     <main class="shell">
       <header class="header">
         <h1>SwitchBot</h1>
-        <div id="statusBadge" class="status-badge">起動確認中</div>
+        <div class="header-actions">
+          <button id="themeButton" class="icon-button" type="button" aria-label="ダークモードに切り替え">🌙</button>
+          <button id="credentialSettingsButton" class="icon-button" type="button">
+            API設定
+          </button>
+          <button id="editModeButton" class="icon-button" type="button">編集</button>
+          <div id="statusBadge" class="status-badge">起動確認中</div>
+        </div>
       </header>
 
-      <section class="toolbar" id="buttonList" aria-label="操作ボタン"></section>
+      <section id="credentialSetup" class="credential-setup" hidden>
+        <div class="setup-heading">
+          <div class="setup-mark" aria-hidden="true">🔐</div>
+          <div>
+            <p id="credentialEyebrow" class="setup-eyebrow">初回セットアップ</p>
+            <h2 id="credentialTitle">SwitchBot APIを接続</h2>
+            <p id="credentialDescription">
+              SwitchBotアプリで発行したOpen TokenとSecret Keyを入力してください。
+              入力内容は確認後、Windows資格情報へ安全に保存します。
+            </p>
+          </div>
+        </div>
+        <form id="credentialForm" class="credential-form">
+          <label>
+            <span>Open Token</span>
+            <input
+              id="credentialToken"
+              name="token"
+              type="password"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <label>
+            <span>Secret Key</span>
+            <input
+              id="credentialSecret"
+              name="secret"
+              type="password"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <div class="credential-actions">
+            <button id="credentialCancelButton" class="icon-button" type="button" hidden>
+              キャンセル
+            </button>
+            <button id="credentialSaveButton" class="apply-button" type="submit">
+              接続を確認して保存
+            </button>
+          </div>
+        </form>
+        <p id="credentialMessage" class="setup-message" aria-live="polite"></p>
+        <p class="setup-note">
+          この情報はconfig.jsonやポータブルZIPには保存されません。従来の.env設定も引き続き利用できます。
+        </p>
+      </section>
 
-      <section class="result" aria-live="polite">
+      <section class="status-panel" aria-label="状態">
+        <div class="section-heading">
+          <h2>環境</h2>
+          <button id="refreshStatusButton" class="icon-button" type="button" title="状態を更新">
+            更新
+          </button>
+        </div>
+        <div id="environmentList" class="environment-list">
+          <div class="empty-text">取得待ちです。</div>
+        </div>
+        <div id="statusCheckedAt" class="checked-at"></div>
+      </section>
+
+      <section class="scene-panel" aria-label="シーン">
+        <div class="section-heading">
+          <h2>クイック操作</h2>
+          <div class="quick-action-group-creator">
+            <input id="newQuickActionGroupName" type="text" placeholder="新しいグループ" />
+            <button id="addQuickActionGroupButton" class="icon-button" type="button">グループを追加</button>
+          </div>
+        </div>
+        <div id="sceneCandidateNotice" class="scene-candidate-notice" hidden>
+          <div>
+            <strong id="sceneCandidateCount">未追加のシーンがあります</strong>
+            <span>SwitchBotから新しいシーンを取得しました。</span>
+          </div>
+          <div class="scene-candidate-actions">
+            <button id="manageSceneCandidatesButton" class="icon-button" type="button">
+              個別に選ぶ
+            </button>
+            <button id="addAllScenesButton" class="apply-button" type="button">
+              すべて追加
+            </button>
+          </div>
+        </div>
+        <div id="buttonList" class="action-groups"></div>
+      </section>
+
+      <section class="device-panel primary-panel" aria-label="デバイス状態">
+        <div class="section-heading">
+          <h2>デバイス</h2>
+          <div class="room-creator">
+            <input id="newRoomName" type="text" placeholder="新しい部屋" />
+            <button id="addRoomButton" class="icon-button" type="button">部屋を追加</button>
+          </div>
+        </div>
+        <div id="deviceStatusList" class="device-status-list">
+          <div class="empty-text">取得待ちです。</div>
+        </div>
+      </section>
+
+      <section id="configPanel" class="config-panel" aria-label="設定更新">
+        <div class="section-heading">
+          <h2>機器・シーン設定</h2>
+          <button id="refreshCandidatesButton" class="icon-button" type="button">候補を再取得</button>
+        </div>
+        <label class="scene-auto-add-setting">
+          <input id="sceneAutoAdd" type="checkbox" />
+          <span>
+            <strong>新しいシーンを自動追加</strong>
+            <small>起動時に見つかった未追加シーンを追加します。除外済みシーンは対象外です。</small>
+          </span>
+        </label>
+        <h3 class="config-subheading">追加候補</h3>
+        <div id="candidateList" class="candidate-list">
+          <div class="empty-text">候補を取得しています。</div>
+        </div>
+        <button id="applyCandidatesButton" class="apply-button" type="button" disabled>選択項目を設定へ追加</button>
+        <h3 class="config-subheading">除外済みシーン</h3>
+        <p class="config-help">除外中は自動追加されません。自動追加がONの場合、除外解除したシーンは取得できればすぐ追加されます。</p>
+        <div id="excludedSceneList" class="candidate-list excluded-scene-list">
+          <div class="empty-text">除外済みシーンはありません。</div>
+        </div>
+        <h3 class="config-subheading">非表示デバイス</h3>
+        <p class="config-help">ランチャー上だけ非表示にしたデバイスです。部屋・アイコン・ロック・マイセット設定は保持されます。</p>
+        <div id="excludedDeviceList" class="candidate-list excluded-device-list">
+          <div class="empty-text">非表示デバイスはありません。</div>
+        </div>
+        <h3 class="config-subheading">取得できない設定</h3>
+        <div id="staleList" class="candidate-list stale-list"></div>
+        <button id="removeStaleButton" class="danger-button" type="button" disabled>選択した存在しない設定を削除</button>
+        <div id="configMessage" class="checked-at"></div>
+        <div class="desktop-settings">
+          <div>
+            <h3>PCアプリ</h3>
+            <div id="desktopStorageMode" class="checked-at"></div>
+            <div id="desktopConfigPath" class="checked-at"></div>
+            <div id="desktopLogPath" class="checked-at"></div>
+          </div>
+          <label class="desktop-autostart">
+            <input id="desktopAutostart" type="checkbox" />
+            Windowsログイン時に自動起動
+          </label>
+          <button id="openLogsButton" class="icon-button" type="button">ログフォルダを開く</button>
+        </div>
+      </section>
+
+      <section class="result legacy-result" aria-live="polite">
         <div class="result-label">最終実行</div>
         <div id="resultMessage" class="result-message">まだ実行していません。</div>
         <div id="resultTime" class="result-time"></div>
       </section>
-    </main>
 
-    <script src="/static/app.js"></script>
+      <details class="history-panel" aria-label="実行履歴">
+        <summary>最近の実行 <span id="historyCount">0件</span></summary>
+        <ol id="historyList" class="history-list">
+          <li class="empty-text">まだ実行していません。</li>
+        </ol>
+      </details>
+
+      <section class="device-panel" aria-label="赤外線リモコン">
+        <div class="section-heading">
+          <h2>赤外線リモコン</h2>
+        </div>
+        <div id="remoteList" class="device-status-list">
+          <div class="empty-text">取得待ちです。</div>
+        </div>
+      </section>
+    </main>
+    <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+
+    <script src="/static/app.js?v=0.3.0"></script>
   </body>
 </html>
