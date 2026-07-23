@@ -226,6 +226,144 @@ async def test_auto_add_adds_only_scenes_and_leaves_device_candidates(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_auto_add_uses_unique_id_when_generated_scene_id_collides(tmp_path):
+    class SceneCollisionClient(FakeClient):
+        async def get_scenes(self):
+            return {
+                "body": [
+                    {"sceneId": "new-scene", "sceneName": "扇風機イオン"},
+                    {"sceneId": "old-scene", "sceneName": "扇風機風量"},
+                ]
+            }
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {
+                        "id": "scene_001",
+                        "label": "扇風機風量",
+                        "type": "scene",
+                        "scene_id": "old-scene",
+                    }
+                ],
+                "scene_sync": {"auto_add": True, "excluded_scene_ids": []},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, SceneCollisionClient())
+
+    result = await service.refresh()
+    scenes = [button for button in load_config(config_path).buttons if button.type == "scene"]
+
+    assert result.auto_added == 1
+    assert [button.scene_id for button in scenes] == ["old-scene", "new-scene"]
+    assert scenes[1].id.startswith("scene_")
+    assert scenes[1].id != "scene_001"
+
+
+@pytest.mark.asyncio
+async def test_scene_auto_add_and_exclusion_preserve_devices_and_remote_actions(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {
+                        "id": "manual_device",
+                        "label": "Manual device",
+                        "type": "device_command",
+                        "device_id": "light-1",
+                        "command": "turnOn",
+                    },
+                    {
+                        "id": "remote_off",
+                        "label": "Remote off",
+                        "type": "remote_command",
+                        "device_id": "remote-1",
+                        "command": "turnOff",
+                    },
+                ],
+                "device_preferences": {
+                    "light-1": {"room": "リビング", "icon": "light", "locked": True}
+                },
+                "scene_sync": {"auto_add": True, "excluded_scene_ids": []},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, FakeClient())
+
+    result = await service.refresh()
+    added_scene = next(
+        button for button in service.current_config().buttons if button.type == "scene"
+    )
+    service.remove_scene(added_scene.id)
+    config = service.current_config()
+
+    assert result.auto_added == 1
+    assert [button.id for button in config.buttons] == ["manual_device", "remote_off"]
+    assert config.device_preferences["light-1"].model_dump() == {
+        "room": "リビング",
+        "icon": "light",
+        "locked": True,
+    }
+    assert config.scene_sync.excluded_scene_ids == ["scene-1"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_reports_stale_settings_without_removing_them(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "buttons": [
+                    {
+                        "id": "missing_scene",
+                        "label": "Missing scene",
+                        "type": "scene",
+                        "scene_id": "missing-scene",
+                    },
+                    {
+                        "id": "missing_device",
+                        "label": "Missing device",
+                        "type": "device_command",
+                        "device_id": "missing-device",
+                        "command": "turnOn",
+                    },
+                    {
+                        "id": "missing_remote",
+                        "label": "Missing remote",
+                        "type": "remote_command",
+                        "device_id": "missing-remote",
+                        "command": "turnOff",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = ConfigSyncService(config_path, FakeClient())
+
+    result = await service.refresh()
+
+    assert [candidate.id for candidate in result.stale] == [
+        "missing_scene",
+        "missing_device",
+        "missing_remote",
+    ]
+    assert [button.id for button in service.current_config().buttons] == [
+        "missing_scene",
+        "missing_device",
+        "missing_remote",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_scene_id_prevents_duplicate_candidate_after_scene_rename(tmp_path):
     config_path = tmp_path / "config.json"
     config_path.write_text(

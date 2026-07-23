@@ -14,7 +14,7 @@
         // Storage may be unavailable in a restricted browser context.
       }
     </script>
-    <link rel="stylesheet" href="/static/style.css?v=mvp3-device-card-polish-1" />
+    <link rel="stylesheet" href="/static/style.css?v=0.3.0" />
   </head>
   <body>
     <main class="shell">
@@ -22,6 +22,9 @@
         <h1>SwitchBot</h1>
         <div class="header-actions">
           <button id="themeButton" class="icon-button" type="button" aria-label="ダークモードに切り替え">🌙</button>
+          <button id="credentialSettingsButton" class="icon-button" type="button">
+            API設定
+          </button>
           <button id="editModeButton" class="icon-button" type="button">編集</button>
           <div id="statusBadge" class="status-badge">起動確認中</div>
         </div>
@@ -31,9 +34,9 @@
         <div class="setup-heading">
           <div class="setup-mark" aria-hidden="true">🔐</div>
           <div>
-            <p class="setup-eyebrow">初回セットアップ</p>
-            <h2>SwitchBot APIを接続</h2>
-            <p>
+            <p id="credentialEyebrow" class="setup-eyebrow">初回セットアップ</p>
+            <h2 id="credentialTitle">SwitchBot APIを接続</h2>
+            <p id="credentialDescription">
               SwitchBotアプリで発行したOpen TokenとSecret Keyを入力してください。
               入力内容は確認後、Windows資格情報へ安全に保存します。
             </p>
@@ -60,9 +63,14 @@
               required
             />
           </label>
-          <button id="credentialSaveButton" class="apply-button" type="submit">
-            接続を確認して保存
-          </button>
+          <div class="credential-actions">
+            <button id="credentialCancelButton" class="icon-button" type="button" hidden>
+              キャンセル
+            </button>
+            <button id="credentialSaveButton" class="apply-button" type="submit">
+              接続を確認して保存
+            </button>
+          </div>
         </form>
         <p id="credentialMessage" class="setup-message" aria-live="polite"></p>
         <p class="setup-note">
@@ -191,6 +199,6 @@
     </main>
     <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 
-    <script src="/static/app.js?v=mvp3-device-card-polish-1"></script>
+    <script src="/static/app.js?v=0.3.0"></script>
   </body>
 </html>

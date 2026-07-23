@@ -132,17 +132,16 @@ def create_app(
 
     @app.get("/api/setup/status")
     async def setup_status() -> dict[str, Any]:
+        source = getattr(app.state, "credentials_source", "missing")
         return {
             "required": bool(getattr(app.state, "setup_required", False)),
             "storage_available": bool(store.available),
             "storage": "Windows Credential Manager" if store.available else None,
-            "source": getattr(app.state, "credentials_source", "missing"),
+            "source": source,
+            "can_update": bool(store.available and source != "env"),
         }
 
-    @app.post("/api/setup/credentials")
-    async def save_credentials(request: CredentialSetupRequest) -> dict[str, Any]:
-        if not getattr(app.state, "setup_required", False):
-            raise HTTPException(status_code=409, detail="認証情報は既に設定されています。")
+    async def save_verified_credentials(request: CredentialSetupRequest) -> dict[str, Any]:
         if not store.available:
             raise HTTPException(
                 status_code=400,
@@ -193,6 +192,21 @@ def create_app(
             "storage": "Windows Credential Manager",
             "source": getattr(app.state, "credentials_source", "windows"),
         }
+
+    @app.post("/api/setup/credentials")
+    async def save_credentials(request: CredentialSetupRequest) -> dict[str, Any]:
+        if not getattr(app.state, "setup_required", False):
+            raise HTTPException(status_code=409, detail="認証情報は既に設定されています。")
+        return await save_verified_credentials(request)
+
+    @app.put("/api/setup/credentials")
+    async def update_credentials(request: CredentialSetupRequest) -> dict[str, Any]:
+        if getattr(app.state, "credentials_source", "missing") == "env":
+            raise HTTPException(
+                status_code=409,
+                detail=".envの認証情報が優先されています。.envを更新して再起動してください。",
+            )
+        return await save_verified_credentials(request)
 
     @app.get("/api/buttons")
     async def buttons() -> dict[str, Any]:
@@ -595,7 +609,12 @@ def _set_startup_failure(
     app.state.remote_control_service = None
     app.state.startup_error = error
     app.state.setup_required = isinstance(error, SecretConfigError)
-    app.state.credentials_source = "missing" if app.state.setup_required else "unknown"
+    if app.state.setup_required:
+        app.state.credentials_source = "missing"
+    elif fallback_settings is not None:
+        app.state.credentials_source = fallback_settings.credentials_source
+    else:
+        app.state.credentials_source = "unknown"
     app.state.desktop_integration = desktop_integration
     if app.state.desktop_integration is None and fallback_settings is not None:
         app.state.desktop_integration = DesktopIntegration(

@@ -107,6 +107,7 @@ class ConfigSyncService:
         excluded_scene_ids = set(config.scene_sync.excluded_scene_ids)
         candidate_items: list[dict[str, Any]] = []
         excluded_items: list[dict[str, Any]] = []
+        reserved_ids = set(existing_ids)
         for item in generated:
             if item["type"] == "scene":
                 if item["scene_id"] in existing_scene_ids:
@@ -114,9 +115,16 @@ class ConfigSyncService:
                 if item["scene_id"] in excluded_scene_ids:
                     excluded_items.append(item)
                     continue
+                item = dict(item)
+                item["id"] = self._available_scene_button_id(
+                    item["id"],
+                    item["scene_id"],
+                    reserved_ids,
+                )
             elif item["id"] in existing_ids:
                 continue
             candidate_items.append(item)
+            reserved_ids.add(item["id"])
 
         self._candidates = {item["id"]: item for item in candidate_items}
         auto_added = 0
@@ -459,3 +467,19 @@ class ConfigSyncService:
             type=item["type"],
             source_id=item.get("scene_id") or item.get("device_id"),
         )
+
+    @staticmethod
+    def _available_scene_button_id(
+        generated_id: str,
+        scene_id: str,
+        reserved_ids: set[str],
+    ) -> str:
+        if generated_id not in reserved_ids:
+            return generated_id
+        digest = hashlib.sha256(scene_id.encode()).hexdigest()[:12]
+        candidate = f"scene_{digest}"
+        suffix = 2
+        while candidate in reserved_ids:
+            candidate = f"scene_{digest}_{suffix}"
+            suffix += 1
+        return candidate

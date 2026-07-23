@@ -11,6 +11,7 @@ REQUIRED_FILES = {
     "README_PORTABLE.md",
     "SwitchBotLocalLauncher.exe",
     "config.example.json",
+    "portable.marker",
     "start.cmd",
 }
 PRIVATE_FILES = {".env", "config.json"}

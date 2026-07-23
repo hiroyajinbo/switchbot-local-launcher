@@ -794,9 +794,20 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
   outline: 3px solid color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.credential-form .apply-button {
+.credential-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.credential-actions .icon-button,
+.credential-actions .apply-button {
   min-height: 46px;
   margin-top: 4px;
+}
+
+.credential-actions .apply-button {
+  flex: 1;
 }
 
 .setup-message {
@@ -820,7 +831,8 @@ body:not(.edit-mode) .room-section.empty-room { display: none; }
 
 body.setup-required .shell > section:not(.credential-setup),
 body.setup-required .shell > details,
-body.setup-required #editModeButton {
+body.setup-required #editModeButton,
+body.setup-required #credentialSettingsButton {
   display: none;
 }
 .remote-quick-edit {

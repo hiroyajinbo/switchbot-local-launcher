@@ -395,6 +395,105 @@ def test_initial_setup_does_not_save_invalid_credentials(tmp_path, monkeypatch):
     assert status.json()["required"] is True
 
 
+def test_existing_credentials_can_be_replaced_after_verification(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"buttons": []}', encoding="utf-8")
+    store = FakeCredentialStore()
+    store.credentials = StoredCredentials(token="old-token", secret="old-secret")
+
+    def settings_loader():
+        credentials = store.load()
+        return Settings(
+            switchbot_token=credentials.token,
+            switchbot_secret=credentials.secret,
+            config_path=str(config_path),
+            credentials_source="windows",
+        )
+
+    monkeypatch.setattr(FakeSwitchBotClient, "should_fail", False)
+    monkeypatch.setattr("app.main.SwitchBotClient", FakeSwitchBotClient)
+    app = create_app(
+        settings_loader=settings_loader,
+        credential_store=store,
+    )
+
+    with TestClient(app) as client:
+        before = client.get("/api/setup/status")
+        updated = client.put(
+            "/api/setup/credentials",
+            json={"token": "new-token", "secret": "new-secret"},
+        )
+        health = client.get("/api/health")
+
+    assert before.json()["can_update"] is True
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["source"] == "windows"
+    assert store.credentials == StoredCredentials(token="new-token", secret="new-secret")
+    assert health.json()["ok"] is True
+
+
+def test_invalid_replacement_keeps_existing_credentials(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"buttons": []}', encoding="utf-8")
+    store = FakeCredentialStore()
+    original = StoredCredentials(token="old-token", secret="old-secret")
+    store.credentials = original
+
+    def settings_loader():
+        credentials = store.load()
+        return Settings(
+            switchbot_token=credentials.token,
+            switchbot_secret=credentials.secret,
+            config_path=str(config_path),
+            credentials_source="windows",
+        )
+
+    monkeypatch.setattr(FakeSwitchBotClient, "should_fail", False)
+    monkeypatch.setattr("app.main.SwitchBotClient", FakeSwitchBotClient)
+    app = create_app(
+        settings_loader=settings_loader,
+        credential_store=store,
+    )
+
+    with TestClient(app) as client:
+        FakeSwitchBotClient.should_fail = True
+        response = client.put(
+            "/api/setup/credentials",
+            json={"token": "wrong", "secret": "wrong"},
+        )
+
+    assert response.status_code == 400
+    assert "認証を確認できませんでした" in response.json()["detail"]
+    assert store.credentials == original
+
+
+def test_env_credentials_must_be_updated_in_env_file() -> None:
+    store = FakeCredentialStore()
+    settings = Settings(
+        switchbot_token="env-token",
+        switchbot_secret="env-secret",
+        credentials_source="env",
+    )
+    app = create_app(
+        settings=settings,
+        executor=FakeExecutor(),
+        status_service=FakeStatusService(),
+        credential_store=store,
+    )
+
+    with TestClient(app) as client:
+        status = client.get("/api/setup/status")
+        response = client.put(
+            "/api/setup/credentials",
+            json={"token": "new-token", "secret": "new-secret"},
+        )
+
+    assert status.json()["can_update"] is False
+    assert response.status_code == 409
+    assert ".env" in response.json()["detail"]
+    assert store.credentials is None
+
+
 def test_execute_action():
     app = create_app(executor=FakeExecutor(), status_service=FakeStatusService())
 

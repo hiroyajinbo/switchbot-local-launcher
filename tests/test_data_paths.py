@@ -1,9 +1,11 @@
+import os
 from pathlib import Path
 
 import pytest
 
 from app.data_paths import (
     PORTABLE_DATA_ROOT_ENV,
+    PORTABLE_MARKER_FILE,
     AppDataPaths,
     desktop_data_paths,
     load_desktop_settings,
@@ -27,6 +29,72 @@ def test_desktop_data_paths_can_use_portable_root(tmp_path) -> None:
     )
 
     assert paths.root == tmp_path / "portable"
+
+
+def test_frozen_executable_detects_adjacent_portable_marker(tmp_path) -> None:
+    portable_root = tmp_path / "portable"
+    portable_root.mkdir()
+    executable = portable_root / "SwitchBotLocalLauncher.exe"
+    executable.touch()
+    (portable_root / PORTABLE_MARKER_FILE).write_text("portable", encoding="utf-8")
+
+    paths = desktop_data_paths(
+        {"LOCALAPPDATA": str(tmp_path / "local")},
+        executable_path=executable,
+        frozen=True,
+    )
+
+    assert paths.root == portable_root
+
+
+def test_detected_portable_root_is_shared_with_runtime_status(tmp_path, monkeypatch) -> None:
+    portable_root = tmp_path / "portable"
+    portable_root.mkdir()
+    executable = portable_root / "SwitchBotLocalLauncher.exe"
+    executable.touch()
+    (portable_root / PORTABLE_MARKER_FILE).touch()
+    monkeypatch.delenv(PORTABLE_DATA_ROOT_ENV, raising=False)
+
+    desktop_data_paths(
+        executable_path=executable,
+        frozen=True,
+    )
+
+    assert Path(os.environ[PORTABLE_DATA_ROOT_ENV]) == portable_root
+
+
+def test_frozen_executable_without_marker_uses_local_app_data(tmp_path) -> None:
+    executable = tmp_path / "app" / "SwitchBotLocalLauncher.exe"
+    executable.parent.mkdir()
+    executable.touch()
+
+    paths = desktop_data_paths(
+        {"LOCALAPPDATA": str(tmp_path / "local")},
+        executable_path=executable,
+        frozen=True,
+    )
+
+    assert paths.root == tmp_path / "local" / "SwitchBotLocalLauncher"
+
+
+def test_explicit_portable_root_overrides_adjacent_marker(tmp_path) -> None:
+    executable_root = tmp_path / "detected"
+    executable_root.mkdir()
+    executable = executable_root / "SwitchBotLocalLauncher.exe"
+    executable.touch()
+    (executable_root / PORTABLE_MARKER_FILE).touch()
+    explicit_root = tmp_path / "explicit"
+
+    paths = desktop_data_paths(
+        {
+            PORTABLE_DATA_ROOT_ENV: str(explicit_root),
+            "LOCALAPPDATA": str(tmp_path / "local"),
+        },
+        executable_path=executable,
+        frozen=True,
+    )
+
+    assert paths.root == explicit_root
 
 
 def test_prepare_desktop_data_copies_once_without_overwrite(tmp_path) -> None:
@@ -59,6 +127,19 @@ def test_prepare_desktop_data_allows_missing_env(tmp_path) -> None:
 
     assert not paths.env.exists()
     assert paths.config.exists()
+
+
+def test_prepare_desktop_data_uses_packaged_config_template(tmp_path) -> None:
+    paths = AppDataPaths(tmp_path / "portable")
+    paths.root.mkdir()
+    (paths.root / "config.example.json").write_text(
+        '{"buttons": []}',
+        encoding="utf-8",
+    )
+
+    prepare_desktop_data(tmp_path / "unrelated", paths=paths)
+
+    assert paths.config.read_text(encoding="utf-8") == '{"buttons": []}'
 
 
 def test_desktop_settings_resolve_relative_paths_inside_data_root(tmp_path, monkeypatch) -> None:

@@ -52,6 +52,8 @@ copy /Y "config.example.json" "%PACKAGE_DIR%\config.example.json" >nul
 if errorlevel 1 exit /b %errorlevel%
 copy /Y "docs\portable-package.md" "%PACKAGE_DIR%\README_PORTABLE.md" >nul
 if errorlevel 1 exit /b %errorlevel%
+copy /Y "portable.marker" "%PACKAGE_DIR%\portable.marker" >nul
+if errorlevel 1 exit /b %errorlevel%
 
 if defined INCLUDE_LOCAL_CONFIG (
   if not exist "config.json" (

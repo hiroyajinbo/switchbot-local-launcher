@@ -6,11 +6,16 @@ const addRoomButton = document.querySelector("#addRoomButton");
 const candidateList = document.querySelector("#candidateList");
 const configMessage = document.querySelector("#configMessage");
 const configPanel = document.querySelector("#configPanel");
+const credentialCancelButton = document.querySelector("#credentialCancelButton");
+const credentialDescription = document.querySelector("#credentialDescription");
+const credentialEyebrow = document.querySelector("#credentialEyebrow");
 const credentialForm = document.querySelector("#credentialForm");
 const credentialMessage = document.querySelector("#credentialMessage");
 const credentialSaveButton = document.querySelector("#credentialSaveButton");
 const credentialSecret = document.querySelector("#credentialSecret");
+const credentialSettingsButton = document.querySelector("#credentialSettingsButton");
 const credentialSetup = document.querySelector("#credentialSetup");
+const credentialTitle = document.querySelector("#credentialTitle");
 const credentialToken = document.querySelector("#credentialToken");
 const deviceStatusList = document.querySelector("#deviceStatusList");
 const desktopAutostart = document.querySelector("#desktopAutostart");
@@ -52,6 +57,7 @@ let currentButtons = [];
 let latestCandidateData = null;
 let roomEditBusy = false;
 let quickActionGroupEditBusy = false;
+let credentialSetupMode = "initial";
 const collapsedQuickActionGroups = loadCollapsedQuickActionGroups();
 const quickIconOptions = {
   scene: "シーン", light: "照明", strip_light: "テープライト", plug: "プラグ",
@@ -2064,21 +2070,64 @@ async function openDesktopLogs() {
   }
 }
 
-function showCredentialSetup(status) {
+function credentialSaveLabel() {
+  return credentialSetupMode === "update" ? "接続を確認して更新" : "接続を確認して保存";
+}
+
+function showCredentialSetup(status, mode = "initial") {
+  credentialSetupMode = mode;
+  const updating = mode === "update";
   document.body.classList.add("setup-required");
   credentialSetup.hidden = false;
-  credentialSaveButton.disabled = !status.storage_available;
-  credentialMessage.textContent = status.storage_available
-    ? "接続確認には数秒かかる場合があります。"
-    : "Windows資格情報を利用できません。.envへ認証情報を設定してください。";
-  credentialMessage.classList.toggle("error", !status.storage_available);
-  setStatus(false, "初回設定");
+  credentialEyebrow.textContent = updating ? "API設定" : "初回セットアップ";
+  credentialTitle.textContent = updating
+    ? "SwitchBot API認証情報を再設定"
+    : "SwitchBot APIを接続";
+  credentialDescription.textContent = updating
+    ? "新しいOpen TokenとSecret Keyを入力してください。接続確認に成功した場合だけ、現在のWindows資格情報を上書きします。"
+    : "SwitchBotアプリで発行したOpen TokenとSecret Keyを入力してください。入力内容は確認後、Windows資格情報へ安全に保存します。";
+  credentialCancelButton.hidden = !updating;
+  credentialSaveButton.textContent = credentialSaveLabel();
+
+  const envManaged = updating && status.source === "env";
+  credentialSaveButton.disabled = !status.storage_available || envManaged;
+  if (!status.storage_available) {
+    credentialMessage.textContent =
+      "Windows資格情報を利用できません。.envへ認証情報を設定してください。";
+  } else if (envManaged) {
+    credentialMessage.textContent =
+      ".envの認証情報が優先されています。.envを更新してアプリを再起動してください。";
+  } else {
+    credentialMessage.textContent = "接続確認には数秒かかる場合があります。";
+  }
+  credentialMessage.classList.toggle("error", !status.storage_available || envManaged);
+  setStatus(false, updating ? "API再設定" : "初回設定");
   window.setTimeout(() => credentialToken.focus(), 0);
 }
 
 function hideCredentialSetup() {
   document.body.classList.remove("setup-required");
   credentialSetup.hidden = true;
+  credentialToken.value = "";
+  credentialSecret.value = "";
+  credentialMessage.classList.remove("error");
+}
+
+async function openCredentialSettings() {
+  credentialSettingsButton.disabled = true;
+  try {
+    const status = await requestJson("/api/setup/status");
+    showCredentialSetup(status, "update");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    credentialSettingsButton.disabled = false;
+  }
+}
+
+async function cancelCredentialSettings() {
+  hideCredentialSetup();
+  await boot();
 }
 
 async function saveCredentials(event) {
@@ -2092,7 +2141,7 @@ async function saveCredentials(event) {
 
   try {
     await requestJson("/api/setup/credentials", {
-      method: "POST",
+      method: credentialSetupMode === "update" ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token: credentialToken.value,
@@ -2101,8 +2150,16 @@ async function saveCredentials(event) {
     });
     credentialToken.value = "";
     credentialSecret.value = "";
-    credentialMessage.textContent = "保存しました。画面を準備しています。";
+    credentialMessage.textContent =
+      credentialSetupMode === "update"
+        ? "更新しました。画面を再読み込みしています。"
+        : "保存しました。画面を準備しています。";
+    const successMessage =
+      credentialSetupMode === "update"
+        ? "SwitchBot API認証情報を更新しました。"
+        : "SwitchBot APIへ接続しました。";
     await boot();
+    showToast(successMessage);
   } catch (error) {
     credentialMessage.textContent = error.message;
     credentialMessage.classList.add("error");
@@ -2110,7 +2167,7 @@ async function saveCredentials(event) {
     credentialToken.disabled = false;
     credentialSecret.disabled = false;
     credentialSaveButton.disabled = false;
-    credentialSaveButton.textContent = "接続を確認して保存";
+    credentialSaveButton.textContent = credentialSaveLabel();
   }
 }
 
@@ -2254,6 +2311,8 @@ removeStaleButton.addEventListener("click", removeStale);
 desktopAutostart.addEventListener("change", updateDesktopAutostart);
 openLogsButton.addEventListener("click", openDesktopLogs);
 credentialForm.addEventListener("submit", saveCredentials);
+credentialSettingsButton.addEventListener("click", openCredentialSettings);
+credentialCancelButton.addEventListener("click", cancelCredentialSettings);
 editModeButton.addEventListener("click", () => {
   const editing = document.body.classList.toggle("edit-mode");
   editModeButton.textContent = editing ? "完了" : "編集";

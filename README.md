@@ -23,6 +23,7 @@ Copy-Item config.example.json config.json
 
 認証情報は、初回起動時の画面でSwitchBotアプリから取得したOpen TokenとSecret Keyを
 入力します。接続確認後、現在のWindowsユーザーの「資格情報マネージャー」へ保存されます。
+保存後は通常画面上部の「API設定」から再入力でき、接続確認に成功した場合だけ上書きされます。
 `.env` を使う従来方式も互換性のため利用でき、その場合は画面保存より優先されます。
 
 `.env`方式を利用する場合だけ、次を実行して認証情報を記入します。
@@ -111,6 +112,9 @@ Pythonを意識せず起動できる `onedir` 形式のWindowsアプリは、次
 ```powershell
 .\package-portable.cmd
 ```
+
+ポータブルフォルダでは`start.cmd`または`SwitchBotLocalLauncher.exe`を実行できます。
+EXEを直接開いた場合も同梱マーカーを検出し、そのフォルダ内の設定とログを使用します。
 
 通常パッケージは作成後に自動検査され、`.env`・`config.json`の混入や必須ファイルの不足が
 見つかると失敗します。個人設定も含める場合だけ`--with-local-config`を指定してください。
