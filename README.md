@@ -106,6 +106,20 @@ Pythonを意識せず起動できる `onedir` 形式のWindowsアプリは、次
 .\desktop-package-smoke.cmd
 ```
 
+別PCへ持ち出せるフォルダとZIPは、次のコマンドで作成します。
+
+```powershell
+.\package-portable.cmd
+```
+
+通常パッケージは作成後に自動検査され、`.env`・`config.json`の混入や必須ファイルの不足が
+見つかると失敗します。個人設定も含める場合だけ`--with-local-config`を指定してください。
+詳細は`docs/portable-package.md`を参照してください。
+
+GitHub Actionsでは、Linux上のlint・自動テストに加えて、Windows上で
+`package-portable.cmd --clean`を実行します。デスクトップEXEのビルドと、
+認証情報を含まないポータブルフォルダ／ZIPの生成まで継続的に検証します。
+
 ## ブラウザ拡張
 
 `browser_extension` は、起動中のPCアプリに登録されたクイック操作をChromeまたは

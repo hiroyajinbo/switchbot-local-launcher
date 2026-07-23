@@ -68,6 +68,7 @@ def test_desktop_window_owns_server_lifecycle(tmp_path) -> None:
     settings = Settings(
         switchbot_token="token",
         switchbot_secret="secret",
+        config_path=str(tmp_path / "config.json"),
         log_path=str(tmp_path / "launcher.log"),
     )
 
@@ -85,4 +86,10 @@ def test_desktop_window_owns_server_lifecycle(tmp_path) -> None:
     assert webview.created[0] == "SwitchBot Local Launcher"
     assert webview.created[1] == "http://127.0.0.1:8765/"
     assert webview.created[2]["min_size"] == (720, 560)
-    assert webview.started == {"gui": "edgechromium", "debug": False}
+    assert webview.started == {
+        "gui": "edgechromium",
+        "debug": False,
+        "private_mode": False,
+        "storage_path": str(tmp_path / "webview"),
+    }
+    assert (tmp_path / "webview").is_dir()

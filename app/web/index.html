@@ -4,6 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SwitchBot Local Launcher</title>
+    <script>
+      try {
+        const savedTheme = localStorage.getItem("switchbot-theme");
+        if (savedTheme === "dark" || savedTheme === "light") {
+          document.documentElement.dataset.theme = savedTheme;
+        }
+      } catch {
+        // Storage may be unavailable in a restricted browser context.
+      }
+    </script>
     <link rel="stylesheet" href="/static/style.css?v=mvp3-device-card-polish-1" />
   </head>
   <body>

@@ -74,6 +74,10 @@ dist\portable\SwitchBotLocalLauncher-portable
 dist\portable\SwitchBotLocalLauncher-portable.zip
 ```
 
+作成後はフォルダとZIPを自動検査します。通常パッケージに`.env`または`config.json`が
+混入している場合や、起動に必要なファイルが不足している場合はエラーで停止します。
+`--with-local-config`を指定した個人用パッケージでは、明示的に設定ファイルの同梱を許可します。
+
 PyInstaller の中間生成物も作り直す場合:
 
 ```cmd

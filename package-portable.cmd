@@ -73,6 +73,11 @@ if errorlevel 1 exit /b %errorlevel%
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%PACKAGE_DIR%\*' -DestinationPath '%ZIP_PATH%' -Force"
 if errorlevel 1 exit /b %errorlevel%
 
+set "VERIFY_OPTION="
+if defined INCLUDE_LOCAL_CONFIG set "VERIFY_OPTION=--allow-local-config"
+".venv\Scripts\python.exe" -m app.portable_package --package-dir "%PACKAGE_DIR%" --zip-path "%ZIP_PATH%" --source-env ".env" %VERIFY_OPTION%
+if errorlevel 1 exit /b %errorlevel%
+
 echo.
 echo Portable package complete:
 echo   Folder: %PACKAGE_DIR%

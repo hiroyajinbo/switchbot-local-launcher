@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Protocol
 
 from app.credential_store import WindowsCredentialStore
@@ -90,6 +91,8 @@ def _run_desktop_window(
     )
     try:
         url = server.start()
+        storage_path = Path(settings.config_path).resolve().parent / "webview"
+        storage_path.mkdir(parents=True, exist_ok=True)
         window = webview_module.create_window(
             WINDOW_TITLE,
             url,
@@ -98,7 +101,12 @@ def _run_desktop_window(
             min_size=(720, 560),
         )
         window.events.closed += server.stop
-        webview_module.start(gui="edgechromium", debug=False)
+        webview_module.start(
+            gui="edgechromium",
+            debug=False,
+            private_mode=False,
+            storage_path=str(storage_path),
+        )
     except LauncherError as exc:
         print(f"ERROR: {exc}")
         raise SystemExit(1) from None
